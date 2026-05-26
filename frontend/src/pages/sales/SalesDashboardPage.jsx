@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import StatCard from '../../components/StatCard';
 import LeadTable from '../../components/LeadTable';
+import RegisterStudentModal from '../../components/admissions/RegisterStudentModal';
+import { useStudentRegistration } from '../../hooks/useStudentRegistration';
 
 export default function SalesDashboardPage() {
   const [data, setData] = useState(null);
@@ -27,6 +29,15 @@ export default function SalesDashboardPage() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  const {
+    registerLead,
+    setRegisterLead,
+    registeredLeadIds,
+    handleStatusChange,
+    handleRegisterClick,
+    handleRegistrationSuccess,
+  } = useStudentRegistration(fetchAll);
 
   if (loading) return <div className="skeleton-loader">Loading...</div>;
   if (!data) return <p className="muted-text">Could not load dashboard.</p>;
@@ -72,8 +83,25 @@ export default function SalesDashboardPage() {
 
       <div className="app-card">
         <h2 className="section-heading">My Assigned Leads</h2>
-        <LeadTable leads={leads} onRefresh={fetchAll} isAdmin={false} />
+        <LeadTable
+          leads={leads}
+          onRefresh={fetchAll}
+          isAdmin={false}
+          registeredLeadIds={registeredLeadIds}
+          onStatusChange={handleStatusChange}
+          onRegisterStudent={handleRegisterClick}
+        />
       </div>
+
+      <RegisterStudentModal
+        open={!!registerLead}
+        lead={registerLead}
+        isAlreadyRegistered={
+          registerLead ? registeredLeadIds.has(String(registerLead._id)) : false
+        }
+        onClose={() => setRegisterLead(null)}
+        onSuccess={handleRegistrationSuccess}
+      />
     </div>
   );
 }

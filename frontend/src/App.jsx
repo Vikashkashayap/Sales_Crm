@@ -9,8 +9,11 @@ import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminUploadPage from './pages/admin/AdminUploadPage';
 import AdminFollowUpsPage from './pages/admin/AdminFollowUpsPage';
+import AdminBDAPerformancePage from './pages/admin/AdminBDAPerformancePage';
 import SalesDashboardPage from './pages/sales/SalesDashboardPage';
 import SalesLeadsPage from './pages/sales/SalesLeadsPage';
+import AdmissionsPage from './pages/AdmissionsPage';
+import PaymentsPage from './pages/PaymentsPage';
 
 function PrivateRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -42,9 +45,12 @@ export default function App() {
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboardPage />} />
         <Route path="leads" element={<AdminLeadsPage />} />
+        <Route path="performance" element={<AdminBDAPerformancePage />} />
         <Route path="followups" element={<AdminFollowUpsPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="upload" element={<AdminUploadPage />} />
+        <Route path="admissions" element={<AdmissionsPage />} />
+        <Route path="payments" element={<PaymentsPage />} />
       </Route>
       <Route
         path="/"
@@ -57,6 +63,8 @@ export default function App() {
         <Route index element={<RoleRedirect />} />
         <Route path="dashboard" element={<SalesDashboardPage />} />
         <Route path="leads" element={<SalesLeadsPage />} />
+        <Route path="admissions" element={<AdmissionsPage />} />
+        <Route path="payments" element={<PaymentsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

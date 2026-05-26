@@ -13,6 +13,9 @@ import noteRoutes from './routes/noteRoutes.js';
 import followUpRoutes from './routes/followUpRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+import studentRoutes from './routes/studentRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import performanceRoutes from './routes/performanceRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -32,6 +35,9 @@ app.use('/api/notes', noteRoutes);
 app.use('/api/followups', followUpRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/performance', performanceRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

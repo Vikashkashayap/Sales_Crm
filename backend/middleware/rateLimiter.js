@@ -1,8 +1,18 @@
 const windowMs = 15 * 60 * 1000;
-const maxRequests = 300;
+const maxRequests = 1000;
 const hits = new Map();
 
+const skipPaths = ['/api/health'];
+
 export const rateLimiter = (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+
+  if (skipPaths.some((p) => req.path === p || req.path.startsWith(`${p}/`))) {
+    return next();
+  }
+
   const key = req.ip || req.socket?.remoteAddress || 'unknown';
   const now = Date.now();
   let entry = hits.get(key);

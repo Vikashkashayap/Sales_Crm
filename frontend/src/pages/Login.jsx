@@ -12,7 +12,8 @@ export default function Login() {
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    if (user) {
+    const token = localStorage.getItem('token');
+    if (user && token) {
       navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
     }
   }, [user, navigate]);
@@ -29,7 +30,11 @@ export default function Login() {
       );
       navigate(data.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      if (err.response?.status === 429) {
+        setError('Bahut saare requests ho gaye. 1-2 minute wait karke dubara try karo.');
+      } else {
+        setError(err.response?.data?.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }

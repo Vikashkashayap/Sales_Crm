@@ -6,6 +6,8 @@ import LeadFormModal from '../../components/leads/LeadFormModal';
 import KanbanBoard from '../../components/leads/KanbanBoard';
 import LeadDetailDrawer from '../../components/leads/LeadDetailDrawer';
 import { useToast } from '../../context/ToastContext';
+import RegisterStudentModal from '../../components/admissions/RegisterStudentModal';
+import { useStudentRegistration } from '../../hooks/useStudentRegistration';
 
 export default function AdminLeadsPage() {
   const toast = useToast();
@@ -54,6 +56,15 @@ export default function AdminLeadsPage() {
     return () => clearTimeout(t);
   }, [fetchData]);
 
+  const {
+    registerLead,
+    setRegisterLead,
+    registeredLeadIds,
+    handleStatusChange,
+    handleRegisterClick,
+    handleRegistrationSuccess,
+  } = useStudentRegistration(fetchData);
+
   const handleExport = async () => {
     try {
       const res = await api.get('/leads/export', { responseType: 'blob' });
@@ -92,7 +103,7 @@ export default function AdminLeadsPage() {
         {loading ? (
           <div className="skeleton-loader">Loading leads...</div>
         ) : view === 'kanban' ? (
-          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin salesUsers={salesUsers} />
+          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin salesUsers={salesUsers} onStatusChange={handleStatusChange} />
         ) : (
           <>
             <LeadTable
@@ -102,6 +113,9 @@ export default function AdminLeadsPage() {
               salesUsers={salesUsers}
               onViewLead={setDetailId}
               onEditLead={(l) => { setEditLead(l); setShowForm(true); }}
+              registeredLeadIds={registeredLeadIds}
+              onStatusChange={handleStatusChange}
+              onRegisterStudent={handleRegisterClick}
             />
             {total > 50 && (
               <div className="pagination">
@@ -116,6 +130,16 @@ export default function AdminLeadsPage() {
 
       <LeadFormModal open={showForm} lead={editLead} salesUsers={salesUsers} onClose={() => setShowForm(false)} onSuccess={fetchData} />
       <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchData} />
+      <RegisterStudentModal
+        open={!!registerLead}
+        lead={registerLead}
+        salesUsers={salesUsers}
+        isAlreadyRegistered={
+          registerLead ? registeredLeadIds.has(String(registerLead._id)) : false
+        }
+        onClose={() => setRegisterLead(null)}
+        onSuccess={handleRegistrationSuccess}
+      />
     </div>
   );
 }

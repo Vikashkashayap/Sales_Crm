@@ -4,6 +4,9 @@ import FollowUpDatePicker from './FollowUpDatePicker';
 import NotesSection from './NotesSection';
 import AssignDropdown from './AssignDropdown';
 import api from '../api/axios';
+import { CONVERTED_STATUSES } from '../utils/studentConstants';
+
+const isConvertedLead = (status) => CONVERTED_STATUSES.includes(status);
 
 export default function LeadTable({
   leads,
@@ -12,6 +15,9 @@ export default function LeadTable({
   salesUsers = [],
   onViewLead,
   onEditLead,
+  onStatusChange,
+  registeredLeadIds = new Set(),
+  onRegisterStudent,
 }) {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -46,12 +52,21 @@ export default function LeadTable({
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleUpdate = async (id, payload) => {
+  const handleUpdate = async (id, payload, lead) => {
     setSaving(true);
     try {
+      const prevStatus = lead?.status;
       await api.put(`/leads/${id}`, payload);
       onRefresh?.();
       setEditingId(null);
+      if (
+        payload.status &&
+        payload.status !== prevStatus &&
+        CONVERTED_STATUSES.includes(payload.status) &&
+        lead
+      ) {
+        onStatusChange?.(lead, payload.status);
+      }
     } catch (err) {
       alert(err.response?.data?.message || 'Update failed');
     } finally {
@@ -196,6 +211,7 @@ export default function LeadTable({
               <th>Deal Value</th>
               <th>Loss Reason</th>
               <th>Notes</th>
+              <th>Admission</th>
               {isAdmin && <th>Actions</th>}
             </tr>
           </thead>
@@ -248,7 +264,7 @@ export default function LeadTable({
                 <td>
                   <StatusDropdown
                     value={lead.status}
-                    onChange={(status) => handleUpdate(lead._id, { ...lead, status })}
+                    onChange={(status) => handleUpdate(lead._id, { status }, lead)}
                     disabled={saving}
                   />
                 </td>
@@ -264,7 +280,7 @@ export default function LeadTable({
                 <td>
                   <FollowUpDatePicker
                     value={lead.followupDate}
-                    onChange={(followupDate) => handleUpdate(lead._id, { ...lead, followupDate })}
+                    onChange={(followupDate) => handleUpdate(lead._id, { followupDate }, lead)}
                     disabled={saving}
                   />
                 </td>
@@ -275,7 +291,7 @@ export default function LeadTable({
                     defaultValue={lead.dealValue ?? ''}
                     onBlur={(e) => {
                       const v = e.target.value;
-                      handleUpdate(lead._id, { ...lead, dealValue: v === '' ? null : Number(v) });
+                      handleUpdate(lead._id, { dealValue: v === '' ? null : Number(v) }, lead);
                     }}
                     className="app-input"
                     style={{ width: 90 }}
@@ -305,6 +321,21 @@ export default function LeadTable({
                     onAddNote={(notes) => handleUpdate(lead._id, { ...lead, notes })}
                     disabled={saving}
                   />
+                </td>
+                <td>
+                  {registeredLeadIds.has(String(lead._id)) ? (
+                    <span className="badge badge-student-active">Registered</span>
+                  ) : isConvertedLead(lead.status) ? (
+                    <button
+                      type="button"
+                      className="app-btn app-btn-primary app-btn-sm"
+                      onClick={() => onRegisterStudent?.(lead)}
+                    >
+                      Register
+                    </button>
+                  ) : (
+                    <span className="muted-text">—</span>
+                  )}
                 </td>
                 {isAdmin && (
                   <td className="actions-cell">

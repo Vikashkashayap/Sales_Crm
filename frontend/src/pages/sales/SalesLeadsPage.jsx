@@ -4,6 +4,8 @@ import LeadTable from '../../components/LeadTable';
 import LeadFilters from '../../components/leads/LeadFilters';
 import KanbanBoard from '../../components/leads/KanbanBoard';
 import LeadDetailDrawer from '../../components/leads/LeadDetailDrawer';
+import RegisterStudentModal from '../../components/admissions/RegisterStudentModal';
+import { useStudentRegistration } from '../../hooks/useStudentRegistration';
 
 export default function SalesLeadsPage() {
   const [leads, setLeads] = useState([]);
@@ -34,6 +36,15 @@ export default function SalesLeadsPage() {
     return () => clearTimeout(t);
   }, [fetchData]);
 
+  const {
+    registerLead,
+    setRegisterLead,
+    registeredLeadIds,
+    handleStatusChange,
+    handleRegisterClick,
+    handleRegistrationSuccess,
+  } = useStudentRegistration(fetchData);
+
   return (
     <div>
       <div className="page-toolbar">
@@ -50,12 +61,29 @@ export default function SalesLeadsPage() {
         {loading ? (
           <div className="skeleton-loader">Loading...</div>
         ) : view === 'kanban' ? (
-          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin={false} />
+          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin={false} onStatusChange={handleStatusChange} />
         ) : (
-          <LeadTable leads={leads} onRefresh={fetchData} isAdmin={false} onViewLead={setDetailId} />
+          <LeadTable
+            leads={leads}
+            onRefresh={fetchData}
+            isAdmin={false}
+            onViewLead={setDetailId}
+            registeredLeadIds={registeredLeadIds}
+            onStatusChange={handleStatusChange}
+            onRegisterStudent={handleRegisterClick}
+          />
         )}
       </div>
       <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchData} />
+      <RegisterStudentModal
+        open={!!registerLead}
+        lead={registerLead}
+        isAlreadyRegistered={
+          registerLead ? registeredLeadIds.has(String(registerLead._id)) : false
+        }
+        onClose={() => setRegisterLead(null)}
+        onSuccess={handleRegistrationSuccess}
+      />
     </div>
   );
 }

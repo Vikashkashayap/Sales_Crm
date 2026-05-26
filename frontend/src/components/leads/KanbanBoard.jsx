@@ -3,8 +3,9 @@ import { KANBAN_COLUMNS, statusBadgeClass } from '../../utils/constants';
 import StatusDropdown from '../StatusDropdown';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import { CONVERTED_STATUSES } from '../../utils/studentConstants';
 
-export default function KanbanBoard({ leads, onRefresh, isAdmin, salesUsers }) {
+export default function KanbanBoard({ leads, onRefresh, isAdmin, salesUsers, onStatusChange }) {
   const toast = useToast();
 
   const byStatus = KANBAN_COLUMNS.reduce((acc, col) => {
@@ -17,9 +18,17 @@ export default function KanbanBoard({ leads, onRefresh, isAdmin, salesUsers }) {
   }, {});
 
   const handleStatus = async (lead, status) => {
+    const prevStatus = lead.status;
     try {
       await api.put(`/leads/${lead._id}`, { status });
       onRefresh?.();
+      if (
+        status !== prevStatus &&
+        CONVERTED_STATUSES.includes(status) &&
+        lead
+      ) {
+        onStatusChange?.(lead, status);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Update failed');
     }

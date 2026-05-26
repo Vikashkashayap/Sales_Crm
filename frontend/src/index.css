@@ -1180,6 +1180,421 @@ a:hover {
 .badge-completed { background: rgba(34, 197, 94, 0.15); color: #22C55E; }
 .badge-missed { background: rgba(239, 68, 68, 0.15); color: #EF4444; }
 
+/* ========== Admissions & student registration ========== */
+.register-student-modal {
+  max-width: 720px;
+}
+.modal-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 4px;
+}
+.register-steps {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-main);
+}
+.register-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.register-step.active { color: var(--primary); font-weight: 600; }
+.register-step.done { color: var(--success); }
+.register-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.register-step.active .register-step-num {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.register-already-banner {
+  margin: 0 24px 12px;
+  padding: 12px 16px;
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: #92400E;
+}
+.register-form-body { padding: 0; }
+.register-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+.register-next-btn {
+  background: var(--success) !important;
+  border-color: var(--success) !important;
+  min-width: 200px;
+}
+.lead-attribution-box {
+  grid-column: 1 / -1;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+}
+.lead-attribution-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+.register-confirm { padding: 24px; }
+.register-confirm h3 { margin-bottom: 16px; font-size: 16px; }
+.confirm-dl {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 16px;
+  font-size: 14px;
+}
+.confirm-dl dt { color: var(--muted); font-weight: 500; }
+.admissions-page .stat-mini {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admissions-page .stat-mini strong { font-size: 24px; }
+.admissions-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.text-danger { color: var(--danger); }
+.badge-student-onboarding { background: rgba(26, 111, 212, 0.12); color: var(--primary); }
+.badge-student-active,
+.badge-student-active.badge { background: rgba(22, 163, 74, 0.12); color: var(--success); }
+.badge-student-completed { background: rgba(100, 116, 139, 0.15); color: var(--muted); }
+.badge-payment-pending { background: rgba(217, 119, 6, 0.12); color: var(--warning); }
+.badge-payment-partial { background: rgba(26, 111, 212, 0.12); color: var(--primary); }
+.badge-payment-paid { background: rgba(22, 163, 74, 0.12); color: var(--success); }
+.badge-payment-overdue { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+
+/* ========== Payments & Finance ========== */
+.payments-page .payments-subtitle { margin-top: 4px; }
+.payments-header { align-items: flex-start; }
+.finance-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.finance-stat-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.finance-stat-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.finance-stat-value { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.finance-stat-sub { font-size: 12px; color: var(--muted); }
+.finance-stat-collected .finance-stat-value { color: var(--success); }
+.finance-stat-pending .finance-stat-value { color: var(--warning); }
+.finance-stat-overdue .finance-stat-value { color: var(--danger); }
+.finance-stat-refund .finance-stat-value { color: var(--primary); }
+.finance-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.finance-chart-card { padding: 20px; }
+.finance-chart-title { font-size: 15px; margin-bottom: 16px; font-weight: 600; }
+.finance-bar-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.finance-bar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.finance-bar-label { font-weight: 500; }
+.finance-bar-amount { font-weight: 600; color: var(--success); }
+.finance-bar-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.finance-bar-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.finance-bar-fill.scholarship { background: var(--success); }
+.finance-bar-fill.standard { background: var(--primary); }
+.finance-bar-meta { font-size: 12px; color: var(--muted); margin-top: 4px; display: block; }
+.finance-plan-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.finance-list-card { padding: 0; overflow: hidden; }
+.finance-list-card .admissions-toolbar { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.finance-installment-list { display: flex; flex-direction: column; }
+.finance-installment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.finance-installment-row.overdue {
+  background: rgba(220, 38, 38, 0.04);
+}
+.finance-installment-row.paid { opacity: 0.85; }
+.finance-installment-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.finance-installment-id { font-size: 12px; color: var(--muted); }
+.finance-installment-msg { font-size: 13px; margin-top: 4px; }
+.finance-installment-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ========== BDA Performance ========== */
+.bda-performance-page { max-width: 1100px; }
+.bda-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.bda-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+.bda-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.period-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--card-bg);
+}
+.period-toggle button {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.period-toggle button.active {
+  background: var(--primary);
+  color: white;
+}
+.bda-period-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+.bda-summary-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+.bda-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.bda-tabs button {
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.bda-tabs button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.bda-leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bda-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.bda-card-leader {
+  background: linear-gradient(135deg, #fffbeb 0%, #fff 40%);
+  border-color: #fde68a;
+}
+.bda-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.bda-card-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bda-trophy { font-size: 18px; margin-right: -4px; }
+.bda-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.bda-name { font-size: 15px; display: block; }
+.bda-meta { margin: 2px 0 0; font-size: 12px; }
+.bda-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bda-neglected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--danger);
+  font-weight: 600;
+}
+.bda-neglected-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.bda-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.bda-metric { text-align: center; }
+.bda-metric-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.bda-metric-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.bda-card-progress {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.bda-progress-row { min-width: 0; }
+.bda-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+.bda-progress-met { color: var(--success); font-weight: 600; }
+.bda-check { color: var(--success); }
+.bda-progress-track {
+  height: 8px;
+  background: var(--bg-main);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bda-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.bda-progress-fill-met { background: var(--success); }
+.bda-target-card { margin-bottom: 12px; }
+.bda-target-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.target-form label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.target-form .app-input { width: 100%; margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .bda-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .bda-metrics { grid-template-columns: repeat(3, 1fr); }
+  .bda-card-progress { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 768px) {
   :root {
     --sidebar-width: 76px;
@@ -1219,5 +1634,9 @@ a:hover {
   .lead-form-grid { grid-template-columns: 1fr; }
   .charts-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .finance-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .finance-charts-grid { grid-template-columns: 1fr; }
+  .finance-installment-row { flex-direction: column; }
+  .finance-installment-actions { align-items: flex-start; }
   .kanban-column { min-width: 200px; }
 }

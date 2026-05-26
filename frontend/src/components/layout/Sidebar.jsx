@@ -7,6 +7,8 @@ const navItemClass = ({ isActive }) =>
 
 const dashboardPath = (base) => (base === '/' ? '/dashboard' : `${base}/dashboard`);
 const leadsPath = (base) => (base === '/' ? '/leads' : `${base}/leads`);
+const admissionsPath = (base) => (base === '/' ? '/admissions' : `${base}/admissions`);
+const paymentsPath = (base) => (base === '/' ? '/payments' : `${base}/payments`);
 
 function NavIcon({ name }) {
   const icons = {
@@ -37,6 +39,23 @@ function NavIcon({ name }) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <rect x="3" y="5" width="18" height="16" rx="2" />
         <path d="M8 3v4M16 3v4M3 11h18" strokeLinecap="round" />
+      </svg>
+    ),
+    admissions: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M12 14l9-5-9-5-9 5 9 5z" strokeLinejoin="round" />
+        <path d="M12 14v7M5 10v6a7 7 0 0014 0v-6" strokeLinecap="round" />
+      </svg>
+    ),
+    payments: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" strokeLinecap="round" />
+      </svg>
+    ),
+    performance: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M4 19V5M4 19h16M8 15l3-4 4 6 5-8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
     logout: (
@@ -104,10 +123,22 @@ export default function Sidebar({ basePath, isAdmin }) {
           <NavIcon name="leads" />
           <span className="sidebar-link-label">Leads</span>
         </NavLink>
+        <NavLink to={admissionsPath(basePath)} className={navItemClass} title="Admissions">
+          <NavIcon name="admissions" />
+          <span className="sidebar-link-label">Admissions</span>
+        </NavLink>
+        <NavLink to={paymentsPath(basePath)} className={navItemClass} title="Payments & Finance">
+          <NavIcon name="payments" />
+          <span className="sidebar-link-label">Payments</span>
+        </NavLink>
 
         {isAdmin && (
           <>
             <p className="sidebar-section-label">Admin</p>
+            <NavLink to={`${basePath}/performance`} className={navItemClass} title="BDA Performance">
+              <NavIcon name="performance" />
+              <span className="sidebar-link-label">BDA Performance</span>
+            </NavLink>
             <NavLink to={`${basePath}/followups`} className={navItemClass} title="Follow-ups">
               <NavIcon name="followups" />
               <span className="sidebar-link-label">Follow-ups</span>

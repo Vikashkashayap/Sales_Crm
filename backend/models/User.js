@@ -15,6 +15,9 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['admin', 'sales'], default: 'sales' },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null },
+    employeeId: { type: String, trim: true, default: '' },
+    weeklyAdmissionTarget: { type: Number, default: 2, min: 0 },
+    weeklyRevenueTarget: { type: Number, default: 120000, min: 0 },
   },
   { timestamps: true }
 );

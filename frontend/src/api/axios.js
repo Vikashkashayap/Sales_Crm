@@ -11,13 +11,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let authRedirecting = false;
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+
+      const path = window.location.pathname;
+      const onAuthPage = path === '/login' || path === '/setup';
+      if (!onAuthPage && !authRedirecting) {
+        authRedirecting = true;
+        window.location.replace('/login');
+      }
     }
     return Promise.reject(err);
   }
