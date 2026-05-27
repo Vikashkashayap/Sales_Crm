@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
@@ -67,9 +67,6 @@ export default function Login() {
           <button type="submit" disabled={loading} className="app-btn app-btn-primary" style={{ width: '100%' }}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
-          <p style={{ marginTop: 12, textAlign: 'center', fontSize: 14 }}>
-            <Link to="/setup" className="auth-link">Pehli baar? Admin ID / Password register karo</Link>
-          </p>
         </form>
       </div>
     </div>

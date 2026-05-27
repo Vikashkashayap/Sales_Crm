@@ -72,7 +72,10 @@ function InstallmentRow({ item, onMarkPaid, marking }) {
         </p>
       </div>
       <div className="finance-installment-actions">
-        <strong>{fmt(item.amount)}</strong>
+        <strong>{fmt(item.balanceDue != null && item.status === 'Partial' ? item.balanceDue : item.amount)}</strong>
+        {item.status === 'Partial' && item.paidAmount > 0 && (
+          <span className="muted-text">of {fmt(item.amount)} · {fmt(item.paidAmount)} paid</span>
+        )}
         <span className="muted-text">Due {dueStr}</span>
         {item.status !== 'Paid' && item.status !== 'Refund' && item.installmentNumber > 0 && (
           <button
@@ -81,10 +84,11 @@ function InstallmentRow({ item, onMarkPaid, marking }) {
             disabled={marking}
             onClick={() => onMarkPaid(item.studentId, item.installmentNumber)}
           >
-            Mark Paid
+            {item.status === 'Partial' ? 'Pay Remaining' : 'Mark Paid'}
           </button>
         )}
         {item.status === 'Paid' && <span className="badge badge-payment-paid">Paid</span>}
+        {item.status === 'Partial' && <span className="badge badge-payment-partial">Partial</span>}
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
-import Setup from './pages/Setup';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
@@ -33,7 +32,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/setup" element={<Setup />} />
+      <Route path="/setup" element={<Navigate to="/login" replace />} />
       <Route
         path="/admin"
         element={

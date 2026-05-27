@@ -40,6 +40,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/performance', performanceRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/receipts', express.static(path.join(__dirname, 'receipts')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Sales CRM API running', version: '2.0' });

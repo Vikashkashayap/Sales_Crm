@@ -45,6 +45,7 @@ const studentSchema = new mongoose.Schema(
       enum: INSTALLMENT_PLANS,
       default: 'Full Payment',
     },
+    installmentStartDate: { type: Date, default: null },
     amountPaid: { type: Number, default: 0 },
     studentCode: { type: String, trim: true, unique: true, sparse: true },
     refundEligible: { type: Boolean, default: false },
@@ -52,11 +53,12 @@ const studentSchema = new mongoose.Schema(
       {
         number: { type: Number, required: true },
         amount: { type: Number, required: true },
+        paidAmount: { type: Number, default: 0 },
         dueDate: { type: Date, required: true },
         paidAt: { type: Date, default: null },
         status: {
           type: String,
-          enum: ['Pending', 'Paid', 'Overdue'],
+          enum: ['Pending', 'Partial', 'Paid', 'Overdue'],
           default: 'Pending',
         },
       },

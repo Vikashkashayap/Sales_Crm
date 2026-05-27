@@ -8,8 +8,52 @@ import {
   INSTALLMENT_PLANS,
   COURSE_TYPES,
 } from '../../utils/studentConstants';
+import {
+  buildInstallmentPreview,
+  getInstallmentPlanLabel,
+  sumInstallmentPaid,
+} from '../../utils/paymentHelpers';
 
 const STEPS = ['Student Info', 'Program & Fee', 'Confirm & Register'];
+
+const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
+
+function InstallmentSchedule({ installments, plan, balanceDue, amountPaidNum }) {
+  if (!installments.length) return null;
+
+  return (
+    <div className="installment-preview-box full-width">
+      <div className="installment-preview-header">
+        <strong>Payment schedule</strong>
+        <span className="muted-text">{getInstallmentPlanLabel(plan)}</span>
+      </div>
+      <ul className="installment-preview-list">
+        {installments.map((inst) => {
+          const dueStr = inst.dueDate
+            ? new Date(inst.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+            : '—';
+          const remaining = Math.max(0, inst.amount - (inst.paidAmount || 0));
+          return (
+            <li key={inst.number} className={`installment-preview-row status-${(inst.status || 'pending').toLowerCase()}`}>
+              <span className="installment-preview-num">#{inst.number}</span>
+              <span className="installment-preview-due">Due {dueStr}</span>
+              <span className="installment-preview-amount">{fmtInr(inst.amount)}</span>
+              <span className={`installment-preview-status badge badge-payment-${(inst.status || 'pending').toLowerCase()}`}>
+                {inst.status === 'Partial'
+                  ? `${fmtInr(inst.paidAmount)} paid · ${fmtInr(remaining)} left`
+                  : inst.status}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="installment-preview-summary">
+        <span>Registration amount (included in fee): <strong>{fmtInr(amountPaidNum)}</strong></span>
+        <span>Balance due: <strong>{fmtInr(balanceDue)}</strong></span>
+      </div>
+    </div>
+  );
+}
 
 function leadPhone(lead) {
   const m = String(lead.mobile || '').trim();
@@ -47,6 +91,7 @@ function leadToForm(lead, salesUsers = []) {
     discount: '',
     installmentPlan: 'Full Payment',
     amountPaid: '',
+    installmentStartDate: new Date().toISOString().slice(0, 10),
     notes: lead.requirement || '',
   };
 }
@@ -75,6 +120,7 @@ const emptyForm = {
   discount: '',
   installmentPlan: 'Full Payment',
   amountPaid: '',
+  installmentStartDate: new Date().toISOString().slice(0, 10),
   notes: '',
 };
 
@@ -157,6 +203,16 @@ export default function RegisterStudentModal({
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   const finalFee = Math.max(0, (Number(form.totalFee) || 0) - (Number(form.discount) || 0));
+  const amountPaidNum = Math.max(0, Number(form.amountPaid) || 0);
+  const startDate = form.installmentStartDate ? new Date(`${form.installmentStartDate}T00:00:00`) : new Date();
+  const installmentPreview = buildInstallmentPreview(
+    finalFee,
+    form.installmentPlan,
+    amountPaidNum,
+    startDate
+  );
+  const balanceDue = Math.max(0, finalFee - amountPaidNum);
+  const allocatedPaid = sumInstallmentPaid(installmentPreview);
 
   const validateStudentInfo = () => {
     if (!form.fullName.trim() || !form.phone.trim()) {
@@ -169,6 +225,24 @@ export default function RegisterStudentModal({
   const validateProgram = () => {
     if (!form.programName.trim()) {
       toast.error('Program name is required');
+      return false;
+    }
+    if (finalFee > 0 && amountPaidNum > finalFee) {
+      toast.error('Amount paid cannot exceed final fee');
+      return false;
+    }
+    if (form.installmentPlan === 'Full Payment' && finalFee > 0 && amountPaidNum > 0 && amountPaidNum < finalFee) {
+      toast.error('For Full Payment, amount paid must equal the final fee (or leave it 0 for pay later)');
+      return false;
+    }
+    if (form.installmentPlan !== 'Full Payment' && form.installmentStartDate) {
+      if (Number.isNaN(startDate.getTime())) {
+        toast.error('Please select a valid first due date');
+        return false;
+      }
+    }
+    if (amountPaidNum > 0 && allocatedPaid !== amountPaidNum) {
+      toast.error('Amount paid could not be allocated to installments — check fee and plan');
       return false;
     }
     return true;
@@ -218,6 +292,9 @@ export default function RegisterStudentModal({
         totalFee: form.totalFee === '' ? 0 : Number(form.totalFee),
         discount: form.discount === '' ? 0 : Number(form.discount),
         installmentPlan: form.installmentPlan,
+        installmentStartDate: form.installmentPlan === 'Full Payment'
+          ? null
+          : (form.installmentStartDate ? `${form.installmentStartDate}T00:00:00` : null),
         amountPaid: form.amountPaid === '' ? 0 : Number(form.amountPaid),
         notes: form.notes,
       };
@@ -352,12 +429,51 @@ export default function RegisterStudentModal({
               </label>
               <label>Installment Plan
                 <select className="app-select" value={form.installmentPlan} onChange={(e) => set('installmentPlan', e.target.value)}>
-                  {INSTALLMENT_PLANS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  {INSTALLMENT_PLANS.map((o) => (
+                    <option key={o} value={o}>
+                      {o === 'EMI' ? 'EMI (6 monthly payments)' : o}
+                    </option>
+                  ))}
                 </select>
+                <span className="field-hint">{getInstallmentPlanLabel(form.installmentPlan)}</span>
               </label>
-              <label>Amount Paid Now (₹)
-                <input className="app-input" type="number" min="0" value={form.amountPaid} onChange={(e) => set('amountPaid', e.target.value)} />
+              {form.installmentPlan !== 'Full Payment' && (
+                <label>First due date
+                  <input
+                    className="app-input"
+                    type="date"
+                    value={form.installmentStartDate || ''}
+                    onChange={(e) => set('installmentStartDate', e.target.value)}
+                  />
+                  <span className="field-hint">
+                    This will be the due date for installment/EMI #1. Next payments are monthly from this date.
+                  </span>
+                </label>
+              )}
+              <label>Registration amount (₹)
+                <input
+                  className="app-input"
+                  type="number"
+                  min="0"
+                  max={finalFee || undefined}
+                  value={form.amountPaid}
+                  onChange={(e) => set('amountPaid', e.target.value)}
+                  placeholder={form.installmentPlan === 'Full Payment' && finalFee > 0 ? String(finalFee) : '0'}
+                />
+                {form.installmentPlan !== 'Full Payment' && finalFee > 0 && (
+                  <span className="field-hint">
+                    Included in the total fee. Applied to earliest installment(s). Remaining balance split across the plan.
+                  </span>
+                )}
               </label>
+              {finalFee > 0 && (
+                <InstallmentSchedule
+                  installments={installmentPreview}
+                  plan={form.installmentPlan}
+                  balanceDue={balanceDue}
+                  amountPaidNum={amountPaidNum}
+                />
+              )}
               <label className="full-width">Notes
                 <textarea className="app-input" rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
               </label>
@@ -373,14 +489,23 @@ export default function RegisterStudentModal({
                 <dt>Email</dt><dd>{form.email || '—'}</dd>
                 <dt>Program</dt><dd>{form.programName} ({form.courseType})</dd>
                 <dt>Final Fee</dt><dd>₹{finalFee.toLocaleString('en-IN')}</dd>
-                <dt>Plan</dt><dd>{form.installmentPlan}</dd>
-                <dt>Paid now</dt><dd>₹{(Number(form.amountPaid) || 0).toLocaleString('en-IN')}</dd>
+                <dt>Plan</dt><dd>{form.installmentPlan === 'EMI' ? 'EMI (6 monthly payments)' : form.installmentPlan}</dd>
+                <dt>Registration amount</dt><dd>{fmtInr(amountPaidNum)}</dd>
+                <dt>Balance due</dt><dd>{fmtInr(balanceDue)}</dd>
                 {lead && (
                   <>
                     <dt>Lead source</dt><dd>{form.leadSource || '—'}</dd>
                   </>
                 )}
               </dl>
+              {finalFee > 0 && (
+                <InstallmentSchedule
+                  installments={installmentPreview}
+                  plan={form.installmentPlan}
+                  balanceDue={balanceDue}
+                  amountPaidNum={amountPaidNum}
+                />
+              )}
             </div>
           )}
         </div>

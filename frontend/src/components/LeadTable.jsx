@@ -19,12 +19,23 @@ export default function LeadTable({
   registeredLeadIds = new Set(),
   onRegisterStudent,
 }) {
-  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [leadPatches, setLeadPatches] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkAssignTo, setBulkAssignTo] = useState('');
 
   const leadIds = useMemo(() => leads.map((l) => l._id), [leads]);
+
+  const showOptionalCols = useMemo(() => {
+    const has = (fn) => leads.some(fn);
+    return {
+      platform: has((l) => l.platform),
+      targetYear: has((l) => l.targetYear),
+      requirement: has((l) => l.requirement),
+      dateOfBirth: has((l) => l.dateOfBirth),
+      gender: has((l) => l.gender),
+    };
+  }, [leads]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -52,25 +63,44 @@ export default function LeadTable({
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleUpdate = async (id, payload, lead) => {
-    setSaving(true);
+  useEffect(() => {
+    setLeadPatches({});
+  }, [leadIds.join(',')]);
+
+  const getPatchedLead = (lead) => ({
+    ...lead,
+    ...(leadPatches[lead._id] || {}),
+  });
+
+  const handleInlineUpdate = async (id, payload, lead) => {
+    const prevStatus = leadPatches[id]?.status ?? lead.status;
+    const prevPatch = leadPatches[id] || {};
+
+    setLeadPatches((prev) => ({ ...prev, [id]: { ...prev[id], ...payload } }));
+
     try {
-      const prevStatus = lead?.status;
       await api.put(`/leads/${id}`, payload);
-      onRefresh?.();
-      setEditingId(null);
+
       if (
         payload.status &&
         payload.status !== prevStatus &&
-        CONVERTED_STATUSES.includes(payload.status) &&
-        lead
+        CONVERTED_STATUSES.includes(payload.status)
       ) {
-        onStatusChange?.(lead, payload.status);
+        onStatusChange?.({ ...lead, ...prevPatch, ...payload }, payload.status);
       }
     } catch (err) {
+      setLeadPatches((prev) => {
+        const next = { ...prev };
+        const reverted = { ...(prev[id] || {}) };
+        Object.keys(payload).forEach((key) => {
+          if (key in prevPatch) reverted[key] = prevPatch[key];
+          else delete reverted[key];
+        });
+        if (Object.keys(reverted).length) next[id] = reverted;
+        else delete next[id];
+        return next;
+      });
       alert(err.response?.data?.message || 'Update failed');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -196,27 +226,25 @@ export default function LeadTable({
                 </th>
               )}
               <th>Full Name</th>
-              <th>Phone</th>
-              <th className="col-email">Email</th>
-              <th>Platform</th>
-              <th>Target Year</th>
-              <th>Why Prepare</th>
-              <th>Date of Birth</th>
-              <th>Gender</th>
-              <th>Source</th>
-              <th>Priority</th>
+              <th className="col-contact">Contact</th>
+              {showOptionalCols.platform && <th>Platform</th>}
+              {showOptionalCols.targetYear && <th>Target Year</th>}
+              {showOptionalCols.requirement && <th>Why Prepare</th>}
+              {showOptionalCols.dateOfBirth && <th>DOB</th>}
+              {showOptionalCols.gender && <th>Gender</th>}
               <th>Status</th>
               {isAdmin && <th>Assigned To</th>}
+              <th className="col-notes">Notes</th>
               <th>Follow-up</th>
-              <th>Deal Value</th>
-              <th>Loss Reason</th>
-              <th>Notes</th>
+              <th>Fee</th>
               <th>Admission</th>
               {isAdmin && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {leads.map((lead) => (
+            {leads.map((lead) => {
+              const row = getPatchedLead(lead);
+              return (
               <tr
                 key={lead._id}
                 className={selectedIds.has(lead._id) ? 'row-selected' : undefined}
@@ -236,36 +264,36 @@ export default function LeadTable({
                     {lead.name}
                   </button>
                 </td>
-                <td>{lead.mobile?.includes('@') ? '—' : lead.mobile}</td>
-                <td className="col-email">
-                  {lead.email ? (
-                    <span className="table-email" title={lead.email}>{lead.email}</span>
-                  ) : lead.mobile?.includes('@') ? (
-                    <span className="table-email" title={lead.mobile}>{lead.mobile}</span>
-                  ) : (
-                    '—'
-                  )}
+                <td className="col-contact">
+                  <div className="contact-cell">
+                    {lead.mobile && !lead.mobile.includes('@') && (
+                      <span className="contact-phone">{lead.mobile}</span>
+                    )}
+                    {(lead.email || lead.mobile?.includes('@')) && (
+                      <span className="table-email" title={lead.email || lead.mobile}>
+                        {lead.email || lead.mobile}
+                      </span>
+                    )}
+                    {!lead.mobile && !lead.email && <span className="muted-text">—</span>}
+                  </div>
                 </td>
-                <td>{lead.platform || '-'}</td>
-                <td>{lead.targetYear || '-'}</td>
-                <td className="col-truncate" title={lead.requirement || ''}>
-                  {lead.requirement ? (lead.requirement.length > 40 ? `${lead.requirement.slice(0, 40)}…` : lead.requirement) : '-'}
-                </td>
-                <td>{lead.dateOfBirth || '-'}</td>
-                <td>{lead.gender || '-'}</td>
-                <td>{lead.source || '-'}</td>
-                <td>
-                  {lead.priority && (
-                    <span className={`badge badge-priority-${(lead.priority || '').toLowerCase()}`}>
-                      {lead.priority}
-                    </span>
-                  )}
-                </td>
+                {showOptionalCols.platform && <td>{lead.platform || '—'}</td>}
+                {showOptionalCols.targetYear && <td>{lead.targetYear || '—'}</td>}
+                {showOptionalCols.requirement && (
+                  <td className="col-truncate" title={lead.requirement || ''}>
+                    {lead.requirement
+                      ? lead.requirement.length > 40
+                        ? `${lead.requirement.slice(0, 40)}…`
+                        : lead.requirement
+                      : '—'}
+                  </td>
+                )}
+                {showOptionalCols.dateOfBirth && <td>{lead.dateOfBirth || '—'}</td>}
+                {showOptionalCols.gender && <td>{lead.gender || '—'}</td>}
                 <td>
                   <StatusDropdown
-                    value={lead.status}
-                    onChange={(status) => handleUpdate(lead._id, { status }, lead)}
-                    disabled={saving}
+                    value={row.status}
+                    onChange={(status) => handleInlineUpdate(lead._id, { status }, lead)}
                   />
                 </td>
                 {isAdmin && (
@@ -277,59 +305,41 @@ export default function LeadTable({
                     />
                   </td>
                 )}
+                <td className="col-notes">
+                  <NotesSection
+                    compact
+                    notes={row.notes}
+                    onAddNote={(notes) => handleInlineUpdate(lead._id, { notes }, lead)}
+                  />
+                </td>
                 <td>
                   <FollowUpDatePicker
-                    value={lead.followupDate}
-                    onChange={(followupDate) => handleUpdate(lead._id, { followupDate }, lead)}
-                    disabled={saving}
+                    value={row.followupDate}
+                    onChange={(followupDate) => handleInlineUpdate(lead._id, { followupDate }, lead)}
                   />
                 </td>
                 <td>
                   <input
                     type="number"
-                    placeholder="Value"
-                    defaultValue={lead.dealValue ?? ''}
+                    placeholder="Fee"
+                    key={`fee-${lead._id}-${row.dealValue ?? ''}`}
+                    defaultValue={row.dealValue ?? ''}
                     onBlur={(e) => {
                       const v = e.target.value;
-                      handleUpdate(lead._id, { dealValue: v === '' ? null : Number(v) }, lead);
+                      handleInlineUpdate(lead._id, { dealValue: v === '' ? null : Number(v) }, lead);
                     }}
                     className="app-input"
                     style={{ width: 90 }}
                   />
                 </td>
                 <td>
-                  {editingId === lead._id ? (
-                    <input
-                      type="text"
-                      defaultValue={lead.lossReason}
-                      onBlur={(e) => handleUpdate(lead._id, { ...lead, lossReason: e.target.value })}
-                      className="app-input"
-                      style={{ width: 120 }}
-                    />
-                  ) : (
-                    <span
-                      onClick={() => setEditingId(lead._id)}
-                      style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)' }}
-                    >
-                      {lead.lossReason || 'Set reason'}
-                    </span>
-                  )}
-                </td>
-                <td style={{ minWidth: 180 }}>
-                  <NotesSection
-                    notes={lead.notes}
-                    onAddNote={(notes) => handleUpdate(lead._id, { ...lead, notes })}
-                    disabled={saving}
-                  />
-                </td>
-                <td>
                   {registeredLeadIds.has(String(lead._id)) ? (
                     <span className="badge badge-student-active">Registered</span>
-                  ) : isConvertedLead(lead.status) ? (
+                  ) : isConvertedLead(row.status) ? (
                     <button
                       type="button"
                       className="app-btn app-btn-primary app-btn-sm"
-                      onClick={() => onRegisterStudent?.(lead)}
+                      onClick={() => onRegisterStudent?.({ ...lead, ...row })}
                     >
                       Register
                     </button>
@@ -354,7 +364,8 @@ export default function LeadTable({
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

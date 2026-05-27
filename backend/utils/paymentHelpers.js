@@ -20,6 +20,25 @@ export const getInstallmentCount = (plan) => {
   }
 };
 
+export const getInstallmentPlanLabel = (plan) => {
+  switch (plan) {
+    case '2 Installments':
+      return '2 Installments (2 equal payments)';
+    case '3 Installments':
+      return '3 Installments (3 equal payments)';
+    case 'EMI':
+      return 'EMI (6 monthly payments)';
+    default:
+      return 'Full Payment (single payment)';
+  }
+};
+
+const installmentStatusFromPaid = (paidAmount, amount) => {
+  if (paidAmount >= amount) return 'Paid';
+  if (paidAmount > 0) return 'Partial';
+  return 'Pending';
+};
+
 export const derivePaymentStatus = (finalFee, amountPaid, hasOverdue = false) => {
   if (hasOverdue) return 'Overdue';
   if (!finalFee || finalFee <= 0) return amountPaid > 0 ? 'Partial' : 'Pending';
@@ -28,53 +47,65 @@ export const derivePaymentStatus = (finalFee, amountPaid, hasOverdue = false) =>
   return 'Pending';
 };
 
-const syncInstallmentStatuses = (installments) => {
+export const syncInstallmentStatuses = (installments) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return installments.map((inst) => {
-    if (inst.status === 'Paid') return inst;
+    const amount = Number(inst.amount) || 0;
+    const paidAmount = Number(inst.paidAmount) || 0;
+    if (paidAmount >= amount && amount > 0) {
+      return { ...inst, paidAmount, status: 'Paid' };
+    }
     const due = new Date(inst.dueDate);
     due.setHours(0, 0, 0, 0);
-    if (due < today) return { ...inst, status: 'Overdue' };
-    return { ...inst, status: 'Pending' };
+    if (due < today && paidAmount < amount) {
+      return { ...inst, paidAmount, status: 'Overdue' };
+    }
+    return { ...inst, paidAmount, status: installmentStatusFromPaid(paidAmount, amount) };
   });
 };
 
+export const sumInstallmentPaid = (installments) =>
+  (installments || []).reduce((sum, inst) => sum + (Number(inst.paidAmount) || 0), 0);
+
 export const buildInstallments = (finalFee, plan, startDate = new Date(), amountPaid = 0) => {
   const count = getInstallmentCount(plan);
-  if (!finalFee || finalFee <= 0) {
+  const paidNow = Math.max(0, Number(amountPaid) || 0);
+  const fee = Math.max(0, Number(finalFee) || 0);
+
+  if (!fee) {
     return [{
       number: 1,
       amount: 0,
+      paidAmount: paidNow,
       dueDate: startDate,
-      paidAt: amountPaid > 0 ? startDate : null,
-      status: amountPaid > 0 ? 'Paid' : 'Pending',
+      paidAt: paidNow > 0 ? startDate : null,
+      status: paidNow > 0 ? 'Paid' : 'Pending',
     }];
   }
 
-  const base = Math.floor(finalFee / count);
-  let remainingPaid = amountPaid;
+  const base = Math.floor(fee / count);
+  let remainingPaid = paidNow;
   const installments = [];
 
   for (let i = 0; i < count; i++) {
-    const amount = i === count - 1 ? finalFee - base * (count - 1) : base;
+    const amount = i === count - 1 ? fee - base * (count - 1) : base;
     const dueDate = new Date(startDate);
     dueDate.setMonth(dueDate.getMonth() + i);
 
-    let status = 'Pending';
+    const applied = Math.min(remainingPaid, amount);
+    remainingPaid -= applied;
+
     let paidAt = null;
-    if (remainingPaid >= amount) {
-      status = 'Paid';
-      paidAt = new Date(startDate);
-      remainingPaid -= amount;
-    }
+    if (applied >= amount) paidAt = new Date(startDate);
 
     installments.push({
       number: i + 1,
       amount,
+      paidAmount: applied,
       dueDate,
       paidAt,
-      status,
+      status: installmentStatusFromPaid(applied, amount),
     });
   }
 
@@ -119,9 +150,16 @@ export const ensureStudentInstallments = (student) => {
       doc.amountPaid || 0
     );
   } else {
-    doc.installments = syncInstallmentStatuses(doc.installments);
+    doc.installments = syncInstallmentStatuses(
+      doc.installments.map((inst) => ({
+        ...inst,
+        paidAmount: Number(inst.paidAmount) || (inst.status === 'Paid' ? inst.amount : 0),
+      }))
+    );
   }
   const hasOverdue = doc.installments.some((i) => i.status === 'Overdue');
+  const paidFromInstallments = sumInstallmentPaid(doc.installments);
+  doc.amountPaid = Math.max(Number(doc.amountPaid) || 0, paidFromInstallments);
   doc.paymentStatus = derivePaymentStatus(doc.finalFee, doc.amountPaid, hasOverdue);
   if (!doc.refundEligible && doc.courseType === 'Scholarship') {
     doc.refundEligible = true;

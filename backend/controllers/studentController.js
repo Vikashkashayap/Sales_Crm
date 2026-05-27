@@ -8,6 +8,7 @@ import {
   buildInstallments,
   derivePaymentStatus,
   generateStudentCode,
+  ensureStudentInstallments,
 } from '../utils/paymentHelpers.js';
 
 const toObjectId = (id, fallback) => {
@@ -49,10 +50,13 @@ export const getStudentByLeadId = async (req, res) => {
       return res.json({ registered: false, student: null });
     }
 
+    const registeredById = student.registeredBy?._id || student.registeredBy;
+    const assignedBdaId = student.assignedBda?._id || student.assignedBda;
+
     if (
       req.user.role !== 'admin' &&
-      String(student.registeredBy) !== String(req.user._id) &&
-      String(student.assignedBda) !== String(req.user._id)
+      String(registeredById) !== String(req.user._id) &&
+      String(assignedBdaId) !== String(req.user._id)
     ) {
       const lead = await Lead.findById(req.params.leadId);
       if (!lead || String(lead.assignedTo) !== String(req.user._id)) {
@@ -97,7 +101,7 @@ export const getStudents = async (req, res) => {
     }
 
     const students = await Student.find(filter).populate(populateOpts).sort({ createdAt: -1 });
-    res.json(students);
+    res.json(students.map((s) => ensureStudentInstallments(s)));
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -107,14 +111,16 @@ export const getStudentById = async (req, res) => {
   try {
     const student = await Student.findById(req.params.id).populate(populateOpts);
     if (!student) return res.status(404).json({ message: 'Student not found' });
+    const registeredById = student.registeredBy?._id || student.registeredBy;
+    const assignedBdaId = student.assignedBda?._id || student.assignedBda;
     if (
       req.user.role !== 'admin' &&
-      String(student.registeredBy) !== String(req.user._id) &&
-      String(student.assignedBda) !== String(req.user._id)
+      String(registeredById) !== String(req.user._id) &&
+      String(assignedBdaId) !== String(req.user._id)
     ) {
       return res.status(403).json({ message: 'Access denied' });
     }
-    res.json(student);
+    res.json(ensureStudentInstallments(student));
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -150,6 +156,7 @@ export const createStudent = async (req, res) => {
       totalFee,
       discount,
       installmentPlan,
+      installmentStartDate,
       amountPaid,
       notes,
     } = req.body;
@@ -187,7 +194,11 @@ export const createStudent = async (req, res) => {
     const finalFee = Math.max(0, fee - disc);
     const paid = Number(amountPaid) || 0;
     const plan = installmentPlan || 'Full Payment';
-    const installments = buildInstallments(finalFee, plan, new Date(), paid);
+    const startDate =
+      installmentStartDate && !Number.isNaN(new Date(installmentStartDate).getTime())
+        ? new Date(installmentStartDate)
+        : new Date();
+    const installments = buildInstallments(finalFee, plan, startDate, paid);
     const hasOverdue = installments.some((i) => i.status === 'Overdue');
     const isScholarship = (courseType || '').trim() === 'Scholarship';
 
@@ -214,6 +225,7 @@ export const createStudent = async (req, res) => {
       installmentPlan: plan,
       installments,
       amountPaid: paid,
+      installmentStartDate: plan === 'Full Payment' ? null : startDate,
       paymentStatus: derivePaymentStatus(finalFee, paid, hasOverdue),
       refundEligible: isScholarship,
       status: 'Onboarding',

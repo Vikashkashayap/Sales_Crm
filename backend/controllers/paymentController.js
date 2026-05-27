@@ -1,4 +1,7 @@
 import Student from '../models/Student.js';
+import Payment from '../models/Payment.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import {
   buildPaymentFilter,
   ensureStudentInstallments,
@@ -7,18 +10,27 @@ import {
   inPeriod,
   derivePaymentStatus,
   buildInstallments,
+  sumInstallmentPaid,
+  syncInstallmentStatuses,
 } from '../utils/paymentHelpers.js';
+import { generateReceiptNumber } from '../utils/receiptNumber.js';
+import { generateReceiptPdf } from '../utils/receiptPdf.js';
+import { sendReceiptEmail } from '../services/emailService.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const populateOpts = [
   { path: 'assignedBda', select: 'name email' },
   { path: 'registeredBy', select: 'name email' },
 ];
 
+const toId = (v) => (v && typeof v === 'object' ? (v._id || v.id) : v);
+
 const canAccessStudent = (user, student) => {
   if (user.role === 'admin') return true;
   return (
-    String(student.registeredBy) === String(user._id) ||
-    String(student.assignedBda) === String(user._id)
+    String(toId(student.registeredBy)) === String(user._id) ||
+    String(toId(student.assignedBda)) === String(user._id)
   );
 };
 
@@ -41,12 +53,16 @@ const installmentToListItem = (student, inst) => {
     bdaName: s.assignedBda?.name || s.leadBdaName || '—',
     installmentNumber: inst.number,
     amount: inst.amount,
+    paidAmount: inst.paidAmount || 0,
+    balanceDue: Math.max(0, (Number(inst.amount) || 0) - (Number(inst.paidAmount) || 0)),
     dueDate: inst.dueDate,
     status: inst.status,
     daysOverdue,
     message:
       inst.status === 'Overdue'
-        ? `Installment ${inst.number} overdue by ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} — ₹${formatCurrency(inst.amount).toLocaleString('en-IN')}`
+        ? `Installment ${inst.number} overdue by ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} — ₹${formatCurrency(Math.max(0, inst.amount - (inst.paidAmount || 0))).toLocaleString('en-IN')} due`
+        : inst.status === 'Partial'
+          ? `Installment ${inst.number} partially paid — ₹${formatCurrency(inst.paidAmount || 0).toLocaleString('en-IN')} of ₹${formatCurrency(inst.amount).toLocaleString('en-IN')}`
         : inst.status === 'Paid'
           ? `Installment ${inst.number} paid`
           : `Installment ${inst.number} due — ₹${formatCurrency(inst.amount).toLocaleString('en-IN')}`,
@@ -198,7 +214,7 @@ export const getPaymentsDashboard = async (req, res) => {
 
 export const markInstallmentPaid = async (req, res) => {
   try {
-    const { installmentNumber } = req.body;
+    const { installmentNumber, paymentMode, transactionId, courseName, batch } = req.body || {};
     const num = Number(installmentNumber);
     if (!num) {
       return res.status(400).json({ message: 'installmentNumber is required' });
@@ -208,6 +224,9 @@ export const markInstallmentPaid = async (req, res) => {
     if (!student) return res.status(404).json({ message: 'Student not found' });
     if (!canAccessStudent(req.user, student)) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+    if (!student.email) {
+      return res.status(400).json({ message: 'Student email is missing. Please add student email first.' });
     }
 
     let installments = student.installments?.length
@@ -227,23 +246,16 @@ export const markInstallmentPaid = async (req, res) => {
       return res.status(400).json({ message: 'Installment already paid' });
     }
 
+    installments[idx].paidAmount = installments[idx].amount;
     installments[idx].status = 'Paid';
     installments[idx].paidAt = new Date();
 
-    const totalPaid = installments
-      .filter((i) => i.status === 'Paid')
-      .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const synced = syncInstallmentStatuses(installments);
+    const totalPaid = sumInstallmentPaid(synced);
 
-    const hasOverdue = installments.some((i) => {
-      if (i.status === 'Paid') return false;
-      const due = new Date(i.dueDate);
-      due.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return due < today;
-    });
+    const hasOverdue = synced.some((i) => i.status === 'Overdue');
 
-    student.installments = installments;
+    student.installments = synced;
     student.amountPaid = totalPaid;
     student.paymentStatus = derivePaymentStatus(student.finalFee, totalPaid, hasOverdue);
     if (totalPaid >= student.finalFee && student.finalFee > 0) {
@@ -251,8 +263,115 @@ export const markInstallmentPaid = async (req, res) => {
     }
 
     await student.save();
+
+    const receiptNumber = await generateReceiptNumber();
+    const paidInstAmount = Number(synced[idx]?.paidAmount || synced[idx]?.amount || 0);
+    const remainingAmount = Math.max(0, Number(student.finalFee || 0) - Number(totalPaid || 0));
+    const paymentDate = new Date();
+
+    const receiptsDirAbs = path.join(__dirname, '..', 'receipts');
+    const { absPath, filename } = await generateReceiptPdf({
+      receiptNumber,
+      receiptDirAbs: receiptsDirAbs,
+      student,
+      courseName: courseName || student.programName,
+      batch: batch || '',
+      installmentNumber: num,
+      amountPaid: paidInstAmount,
+      remainingAmount,
+      paymentDate,
+      paymentMode: paymentMode || 'Cash',
+      transactionId: transactionId || '',
+    });
+
+    const receiptUrl = `${req.protocol}://${req.get('host')}/receipts/${filename}`;
+
+    const payment = await Payment.create({
+      student: student._id,
+      installmentNumber: num,
+      amountPaid: paidInstAmount,
+      remainingAmount,
+      courseName: courseName || student.programName || '',
+      batch: batch || '',
+      receiptNumber,
+      receiptUrl,
+      receiptPath: absPath,
+      paymentDate,
+      transactionId: transactionId || '',
+      paymentMode: paymentMode || 'Cash',
+      createdBy: req.user?._id || null,
+      emailSent: false,
+    });
+
+    let emailSent = false;
+    try {
+      await sendReceiptEmail({
+        to: student.email,
+        studentName: student.fullName,
+        amountPaid: paidInstAmount,
+        pdfPath: absPath,
+        receiptNumber,
+      });
+      emailSent = true;
+      payment.emailSent = true;
+      await payment.save();
+    } catch (e) {
+      // Payment is saved; email failure should be visible to frontend for retry.
+      emailSent = false;
+    }
+
     const populated = await Student.findById(student._id).populate(populateOpts);
-    res.json(ensureStudentInstallments(populated));
+    res.json({
+      student: ensureStudentInstallments(populated),
+      payment,
+      emailSent,
+      message: emailSent
+        ? 'Payment successful & receipt sent to student email'
+        : 'Payment saved, but receipt email could not be sent. Please resend.',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const getStudentPaymentHistory = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.studentId).select('_id registeredBy assignedBda');
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+    if (!canAccessStudent(req.user, student)) return res.status(403).json({ message: 'Access denied' });
+
+    const list = await Payment.find({ student: student._id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(list);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const resendReceiptEmail = async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.paymentId).populate('student');
+    if (!payment) return res.status(404).json({ message: 'Payment not found' });
+    const student = payment.student;
+    if (!student) return res.status(400).json({ message: 'Student not found for this payment' });
+    if (!canAccessStudent(req.user, student)) return res.status(403).json({ message: 'Access denied' });
+    if (!student.email) return res.status(400).json({ message: 'Student email is missing' });
+    if (!payment.receiptPath) return res.status(400).json({ message: 'Receipt file path missing' });
+
+    await sendReceiptEmail({
+      to: student.email,
+      studentName: student.fullName,
+      amountPaid: payment.amountPaid,
+      pdfPath: payment.receiptPath,
+      receiptNumber: payment.receiptNumber,
+    });
+
+    payment.emailSent = true;
+    await payment.save();
+
+    res.json({ message: 'Receipt email resent successfully', payment });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }

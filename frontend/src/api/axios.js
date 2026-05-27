@@ -21,7 +21,7 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
 
       const path = window.location.pathname;
-      const onAuthPage = path === '/login' || path === '/setup';
+      const onAuthPage = path === '/login';
       if (!onAuthPage && !authRedirecting) {
         authRedirecting = true;
         window.location.replace('/login');

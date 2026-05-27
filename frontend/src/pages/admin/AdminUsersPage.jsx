@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import CreateUser from '../../components/CreateUser';
+import UserEditModal from '../../components/users/UserEditModal';
+import ResetPasswordModal from '../../components/users/ResetPasswordModal';
 import { useToast } from '../../context/ToastContext';
 
 export default function AdminUsersPage() {
@@ -8,6 +10,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editUser, setEditUser] = useState(null);
+  const [resetUser, setResetUser] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -55,7 +59,7 @@ export default function AdminUsersPage() {
     <div>
       <div className="app-card" style={{ marginBottom: 24 }}>
         <h2 className="section-heading">Create User</h2>
-        <CreateUser onSuccess={fetchData} />
+        <CreateUser onCreated={fetchData} />
       </div>
 
       <div className="app-card">
@@ -94,6 +98,20 @@ export default function AdminUsersPage() {
                       <td>{s ? `${s.conversionRate}%` : '—'}</td>
                       <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}</td>
                       <td className="actions-cell">
+                        <button
+                          type="button"
+                          className="app-btn app-btn-ghost app-btn-sm"
+                          onClick={() => setEditUser(u)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="app-btn app-btn-primary app-btn-sm"
+                          onClick={() => setResetUser(u)}
+                        >
+                          Reset password
+                        </button>
                         <button type="button" className="app-btn app-btn-ghost app-btn-sm" onClick={() => toggleActive(u)}>
                           {u.isActive !== false ? 'Deactivate' : 'Activate'}
                         </button>
@@ -111,6 +129,19 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      <UserEditModal
+        open={Boolean(editUser)}
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onSaved={fetchData}
+      />
+      <ResetPasswordModal
+        open={Boolean(resetUser)}
+        user={resetUser}
+        onClose={() => setResetUser(null)}
+        onSaved={fetchData}
+      />
     </div>
   );
 }

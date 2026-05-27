@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import RegisterStudentModal from '../components/admissions/RegisterStudentModal';
+import StudentPaymentDetailsModal from '../components/admissions/StudentPaymentDetailsModal';
 function StatusBadge({ value, type }) {
   const cls = type === 'payment'
     ? `badge badge-payment-${(value || '').toLowerCase()}`
@@ -18,6 +19,7 @@ export default function AdmissionsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('all');
   const [showRegister, setShowRegister] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [search, setSearch] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -136,7 +138,16 @@ export default function AdmissionsPage() {
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s._id}>
+                  <tr
+                    key={s._id}
+                    className="clickable-row"
+                    onClick={() => setSelectedStudentId(s._id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setSelectedStudentId(s._id);
+                    }}
+                  >
                     <td>
                       <strong>{s.fullName}</strong>
                       <div className="muted-text" style={{ fontSize: 12 }}>{s.phone}</div>
@@ -164,6 +175,13 @@ export default function AdmissionsPage() {
         salesUsers={salesUsers}
         onClose={() => setShowRegister(false)}
         onSuccess={fetchData}
+      />
+
+      <StudentPaymentDetailsModal
+        open={Boolean(selectedStudentId)}
+        studentId={selectedStudentId}
+        onClose={() => setSelectedStudentId(null)}
+        onUpdated={fetchData}
       />
     </div>
   );
