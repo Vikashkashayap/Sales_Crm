@@ -1,4 +1,5 @@
 import Lead from '../models/Lead.js';
+import FollowUp from '../models/FollowUp.js';
 import * as XLSX from 'xlsx';
 import { normalizeEmail, normalizeMobile, parseAllSheets } from '../utils/excelImport.js';
 import { logActivity } from '../utils/activityLogger.js';
@@ -7,6 +8,49 @@ import { buildRoleFilter } from '../utils/leadHelpers.js';
 import { LEAD_STATUSES } from '../utils/constants.js';
 
 const populateOpts = { path: 'assignedTo', select: 'name email' };
+
+const syncFollowUpForLead = async ({ lead, followupDate, assigneeUserId, actorUserId }) => {
+  // If followup is cleared, cancel pending followups for this lead.
+  if (!followupDate) {
+    await FollowUp.updateMany(
+      { lead: lead._id, status: 'pending', isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, status: 'cancelled' } }
+    );
+    return;
+  }
+
+  const scheduledAt = new Date(followupDate);
+  if (Number.isNaN(scheduledAt.getTime())) return;
+
+  // Keep at most one active pending follow-up per lead.
+  await FollowUp.updateMany(
+    { lead: lead._id, status: 'pending', isDeleted: { $ne: true } },
+    { $set: { isDeleted: true, status: 'cancelled' } }
+  );
+
+  await FollowUp.create({
+    lead: lead._id,
+    user: assigneeUserId,
+    scheduledAt,
+    type: 'call',
+    title: '',
+    notes: '',
+    status: 'pending',
+  });
+
+  // keep lead.followupDate in sync (already set by caller, but ensure)
+  await Lead.findByIdAndUpdate(lead._id, { followupDate: scheduledAt });
+
+  // optional activity log, only when we have actor
+  if (actorUserId) {
+    await logActivity({
+      leadId: lead._id,
+      userId: actorUserId,
+      type: 'followup_scheduled',
+      description: `Follow-up scheduled for ${scheduledAt.toLocaleString()}`,
+    });
+  }
+};
 
 const parseListQuery = (req) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -147,6 +191,16 @@ export const createLead = async (req, res) => {
       description: `Lead "${lead.name}" created`,
     });
 
+    if (payload.followupDate) {
+      const assigneeUserId = payload.assignedTo || req.user._id;
+      await syncFollowUpForLead({
+        lead,
+        followupDate: payload.followupDate,
+        assigneeUserId,
+        actorUserId: req.user._id,
+      });
+    }
+
     if (payload.assignedTo) {
       await createNotification({
         userId: payload.assignedTo,
@@ -207,6 +261,7 @@ export const updateLead = async (req, res) => {
 
     const prevStatus = lead.status;
     const prevAssignee = lead.assignedTo?.toString();
+    const prevFollowup = lead.followupDate ? new Date(lead.followupDate).toISOString() : null;
 
     const updated = await Lead.findByIdAndUpdate(req.params.id, updates, { new: true })
       .populate(populateOpts);
@@ -247,6 +302,22 @@ export const updateLead = async (req, res) => {
           metadata: { leadId: lead._id },
         });
       }
+    }
+
+    // Sync follow-ups whenever followupDate changes (or when assignee changes while followup exists)
+    const nextFollowup = updated.followupDate ? new Date(updated.followupDate).toISOString() : null;
+    const followupChanged = updates.followupDate !== undefined && nextFollowup !== prevFollowup;
+    const assigneeChangedWithFollowup =
+      updates.assignedTo !== undefined && nextFollowup && updated.assignedTo?._id?.toString() !== prevAssignee;
+
+    if (followupChanged || assigneeChangedWithFollowup) {
+      const assigneeUserId = updated.assignedTo?._id || updated.assignedTo || req.user._id;
+      await syncFollowUpForLead({
+        lead: updated,
+        followupDate: updated.followupDate,
+        assigneeUserId,
+        actorUserId: req.user._id,
+      });
     }
 
     res.json(updated);

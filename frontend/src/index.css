@@ -569,8 +569,8 @@ a:hover {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -815,6 +815,77 @@ a:hover {
 
 /* ========== Charts & dashboard ========== */
 .dashboard-page { display: flex; flex-direction: column; gap: 16px; }
+
+/* ========== Sales dashboard targets ========== */
+.sales-targets-card {
+  padding: 16px 18px;
+}
+.sales-targets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sales-targets-title {
+  min-width: 0;
+}
+.sales-targets-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
+  gap: 14px;
+  align-items: stretch;
+}
+.sales-targets-chart {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-main);
+  padding: 10px 10px 6px;
+}
+.sales-targets-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sales-targets-metric {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-main);
+  padding: 12px 12px 10px;
+}
+.sales-targets-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sales-targets-metric-value {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.sales-targets-metric .bda-progress-header {
+  display: none;
+}
+.sales-targets-metric .bda-progress-track {
+  height: 10px;
+  background: rgba(100, 116, 139, 0.14);
+}
+.sales-targets-metric .bda-progress-fill {
+  background: linear-gradient(90deg, var(--md-blue) 0%, var(--md-blue-light) 70%);
+}
+.sales-targets-metric .bda-progress-fill-met {
+  background: linear-gradient(90deg, #16A34A 0%, #22C55E 70%);
+}
+
+@media (max-width: 900px) {
+  .sales-targets-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

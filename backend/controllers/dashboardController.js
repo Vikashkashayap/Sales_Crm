@@ -1,9 +1,11 @@
 import Lead from '../models/Lead.js';
 import User from '../models/User.js';
+import Student from '../models/Student.js';
 import FollowUp from '../models/FollowUp.js';
 import Task from '../models/Task.js';
 import Activity from '../models/Activity.js';
 import { buildRoleFilter, CONVERTED_STATUSES, LOST_STATUSES } from '../utils/leadHelpers.js';
+import { getPerformancePeriodRange } from '../utils/performanceHelpers.js';
 
 export const getStats = async (req, res) => {
   try {
@@ -173,6 +175,13 @@ export const getSalesDashboard = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    const user = await User.findById(req.user._id).select(
+      'weeklyAdmissionTarget weeklyRevenueTarget monthlyAdmissionTarget monthlyRevenueTarget'
+    );
+
+    const { start: weekStart, end: weekEnd } = getPerformancePeriodRange('this_week');
+    const { start: monthStart, end: monthEnd } = getPerformancePeriodRange('this_month');
+
     const [
       assignedLeads,
       converted,
@@ -180,6 +189,10 @@ export const getSalesDashboard = async (req, res) => {
       pendingTasks,
       upcomingFollowups,
       recentActivities,
+      weekLeadsConvertedAgg,
+      monthLeadsConvertedAgg,
+      weekStudents,
+      monthStudents,
     ] = await Promise.all([
       Lead.countDocuments(filter),
       Lead.countDocuments({ ...filter, status: { $in: CONVERTED_STATUSES } }),
@@ -207,10 +220,34 @@ export const getSalesDashboard = async (req, res) => {
         .populate('lead', 'name')
         .sort({ createdAt: -1 })
         .limit(10),
+      Lead.aggregate([
+        { $match: { ...filter, status: { $in: CONVERTED_STATUSES }, createdAt: { $gte: weekStart, $lte: weekEnd } } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$dealValue', 0] } } } },
+      ]),
+      Lead.aggregate([
+        { $match: { ...filter, status: { $in: CONVERTED_STATUSES }, createdAt: { $gte: monthStart, $lte: monthEnd } } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$dealValue', 0] } } } },
+      ]),
+      Student.find({ assignedBda: req.user._id, createdAt: { $gte: weekStart, $lte: weekEnd } }).select(
+        'amountPaid finalFee createdAt'
+      ),
+      Student.find({ assignedBda: req.user._id, createdAt: { $gte: monthStart, $lte: monthEnd } }).select(
+        'amountPaid finalFee createdAt'
+      ),
     ]);
 
     const conversionRate =
       assignedLeads > 0 ? Math.round((converted / assignedLeads) * 100) : 0;
+
+    const weekStudentRevenue = (weekStudents || []).reduce((sum, s) => sum + (s.amountPaid || 0), 0);
+    const monthStudentRevenue = (monthStudents || []).reduce((sum, s) => sum + (s.amountPaid || 0), 0);
+    const weekLeadRevenue = weekLeadsConvertedAgg?.[0]?.total ?? 0;
+    const monthLeadRevenue = monthLeadsConvertedAgg?.[0]?.total ?? 0;
+
+    const weeklyRevenue = Math.max(weekStudentRevenue, weekLeadRevenue);
+    const monthlyRevenue = Math.max(monthStudentRevenue, monthLeadRevenue);
+    const weeklyAdmissions = (weekStudents || []).length;
+    const monthlyAdmissions = (monthStudents || []).length;
 
     res.json({
       assignedLeads,
@@ -220,6 +257,26 @@ export const getSalesDashboard = async (req, res) => {
       pendingTasks,
       upcomingFollowups,
       recentActivities,
+      targets: {
+        weeklyAdmissionTarget: user?.weeklyAdmissionTarget ?? 2,
+        weeklyRevenueTarget: user?.weeklyRevenueTarget ?? 120000,
+        monthlyAdmissionTarget: user?.monthlyAdmissionTarget ?? 8,
+        monthlyRevenueTarget: user?.monthlyRevenueTarget ?? 500000,
+      },
+      targetProgress: {
+        weekly: {
+          admissions: weeklyAdmissions,
+          revenue: weeklyRevenue,
+          start: weekStart,
+          end: weekEnd,
+        },
+        monthly: {
+          admissions: monthlyAdmissions,
+          revenue: monthlyRevenue,
+          start: monthStart,
+          end: monthEnd,
+        },
+      },
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });

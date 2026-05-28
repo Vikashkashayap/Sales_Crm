@@ -36,7 +36,9 @@ export const getBDAPerformance = async (req, res) => {
     );
 
     const salesUsers = await User.find({ role: 'sales', isActive: { $ne: false } })
-      .select('name email createdAt employeeId weeklyAdmissionTarget weeklyRevenueTarget')
+      .select(
+        'name email createdAt employeeId weeklyAdmissionTarget weeklyRevenueTarget monthlyAdmissionTarget monthlyRevenueTarget'
+      )
       .sort({ createdAt: 1 });
 
     const [allLeads, allStudents, sessionFollowups] = await Promise.all([
@@ -86,6 +88,12 @@ export const getBDAPerformance = async (req, res) => {
 
         const admissionTarget = user.weeklyAdmissionTarget ?? 2;
         const revenueTarget = user.weeklyRevenueTarget ?? 120000;
+        const monthlyAdmissionTarget = user.monthlyAdmissionTarget ?? 8;
+        const monthlyRevenueTarget = user.monthlyRevenueTarget ?? 500000;
+
+        const isMonthlyPeriod = period === 'this_month' || period === 'last_month';
+        const admissionTargetForPeriod = isMonthlyPeriod ? monthlyAdmissionTarget : admissionTarget;
+        const revenueTargetForPeriod = isMonthlyPeriod ? monthlyRevenueTarget : revenueTarget;
 
         return {
           userId: user._id,
@@ -103,8 +111,12 @@ export const getBDAPerformance = async (req, res) => {
           cvr,
           weeklyAdmissionTarget: admissionTarget,
           weeklyRevenueTarget: revenueTarget,
-          admissionTargetMet: admissions >= admissionTarget,
-          revenueTargetMet: revenue >= revenueTarget,
+          monthlyAdmissionTarget,
+          monthlyRevenueTarget,
+          admissionTargetForPeriod,
+          revenueTargetForPeriod,
+          admissionTargetMet: admissions >= admissionTargetForPeriod,
+          revenueTargetMet: revenue >= revenueTargetForPeriod,
         };
       })
     );
@@ -153,12 +165,24 @@ export const updateBDATargets = async (req, res) => {
       return res.status(404).json({ message: 'BDA not found' });
     }
 
-    const { weeklyAdmissionTarget, weeklyRevenueTarget, employeeId } = req.body;
+    const {
+      weeklyAdmissionTarget,
+      weeklyRevenueTarget,
+      monthlyAdmissionTarget,
+      monthlyRevenueTarget,
+      employeeId,
+    } = req.body;
     if (weeklyAdmissionTarget != null) {
       user.weeklyAdmissionTarget = Math.max(0, Number(weeklyAdmissionTarget) || 0);
     }
     if (weeklyRevenueTarget != null) {
       user.weeklyRevenueTarget = Math.max(0, Number(weeklyRevenueTarget) || 0);
+    }
+    if (monthlyAdmissionTarget != null) {
+      user.monthlyAdmissionTarget = Math.max(0, Number(monthlyAdmissionTarget) || 0);
+    }
+    if (monthlyRevenueTarget != null) {
+      user.monthlyRevenueTarget = Math.max(0, Number(monthlyRevenueTarget) || 0);
     }
     if (employeeId != null) user.employeeId = String(employeeId).trim();
 
@@ -169,6 +193,8 @@ export const updateBDATargets = async (req, res) => {
       employeeId: user.employeeId,
       weeklyAdmissionTarget: user.weeklyAdmissionTarget,
       weeklyRevenueTarget: user.weeklyRevenueTarget,
+      monthlyAdmissionTarget: user.monthlyAdmissionTarget,
+      monthlyRevenueTarget: user.monthlyRevenueTarget,
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });

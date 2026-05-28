@@ -18,6 +18,8 @@ const userSchema = new mongoose.Schema(
     employeeId: { type: String, trim: true, default: '' },
     weeklyAdmissionTarget: { type: Number, default: 2, min: 0 },
     weeklyRevenueTarget: { type: Number, default: 120000, min: 0 },
+    monthlyAdmissionTarget: { type: Number, default: 8, min: 0 },
+    monthlyRevenueTarget: { type: Number, default: 500000, min: 0 },
   },
   { timestamps: true }
 );

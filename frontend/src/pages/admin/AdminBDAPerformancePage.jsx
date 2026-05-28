@@ -36,7 +36,7 @@ function ProgressBar({ current, target, met, label }) {
   );
 }
 
-function BDACard({ row, isLeader, onSetTarget }) {
+function BDACard({ row, isLeader, onSetTarget, period }) {
   const initials = row.name
     ?.split(' ')
     .map((n) => n[0])
@@ -47,6 +47,10 @@ function BDACard({ row, isLeader, onSetTarget }) {
   const joined = row.joinedAt
     ? new Date(row.joinedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : '—';
+
+  const isMonthlyPeriod = period === 'this_month' || period === 'last_month';
+  const admissionsTarget = isMonthlyPeriod ? row.monthlyAdmissionTarget : row.weeklyAdmissionTarget;
+  const revenueTarget = isMonthlyPeriod ? row.monthlyRevenueTarget : row.weeklyRevenueTarget;
 
   return (
     <article className={`bda-card ${isLeader ? 'bda-card-leader' : ''}`}>
@@ -93,15 +97,15 @@ function BDACard({ row, isLeader, onSetTarget }) {
       <div className="bda-card-progress">
         <ProgressBar
           current={row.admissions}
-          target={row.weeklyAdmissionTarget}
+          target={admissionsTarget}
           met={row.admissionTargetMet}
-          label="Weekly Target (Adm)"
+          label={isMonthlyPeriod ? 'Monthly Target (Adm)' : 'Weekly Target (Adm)'}
         />
         <ProgressBar
           current={row.revenue}
-          target={row.weeklyRevenueTarget}
+          target={revenueTarget}
           met={row.revenueTargetMet}
-          label="Weekly Revenue"
+          label={isMonthlyPeriod ? 'Monthly Revenue' : 'Weekly Revenue'}
         />
       </div>
     </article>
@@ -245,6 +249,7 @@ export default function AdminBDAPerformancePage() {
                     row={row}
                     isLeader={i === 0}
                     onSetTarget={setTargetBda}
+                    period={period}
                   />
                 ))
               ) : (
@@ -309,15 +314,15 @@ export default function AdminBDAPerformancePage() {
                   </div>
                   <ProgressBar
                     current={row.admissions}
-                    target={row.weeklyAdmissionTarget}
+                    target={row.admissionTargetForPeriod ?? row.weeklyAdmissionTarget}
                     met={row.admissionTargetMet}
-                    label="Weekly admissions"
+                    label={(period === 'this_month' || period === 'last_month') ? 'Monthly admissions' : 'Weekly admissions'}
                   />
                   <ProgressBar
                     current={row.revenue}
-                    target={row.weeklyRevenueTarget}
+                    target={row.revenueTargetForPeriod ?? row.weeklyRevenueTarget}
                     met={row.revenueTargetMet}
-                    label="Weekly revenue"
+                    label={(period === 'this_month' || period === 'last_month') ? 'Monthly revenue' : 'Weekly revenue'}
                   />
                 </div>
               ))}
