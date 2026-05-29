@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import { PAYMENT_MODES } from '../../utils/studentConstants';
 
 const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
 
@@ -16,6 +17,13 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
   const [student, setStudent] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [resendingWelcome, setResendingWelcome] = useState(false);
+  const [welcomeDocs, setWelcomeDocs] = useState([]);
+  const [welcomeDocsLoading, setWelcomeDocsLoading] = useState(false);
+  const [downloadingKit, setDownloadingKit] = useState(false);
+  const [showDocPreview, setShowDocPreview] = useState(false);
+  const [payingInst, setPayingInst] = useState(null);
+  const [payForm, setPayForm] = useState({ paymentMode: 'Cash', transactionId: '' });
 
   const fetchStudent = async () => {
     if (!studentId) return;
@@ -27,6 +35,19 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
       toast.error(err.response?.data?.message || 'Failed to load student');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWelcomeDocs = async () => {
+    if (!studentId) return;
+    setWelcomeDocsLoading(true);
+    try {
+      const res = await api.get(`/students/${studentId}/welcome-kit/documents`);
+      setWelcomeDocs(Array.isArray(res.data?.documents) ? res.data.documents : []);
+    } catch {
+      setWelcomeDocs([]);
+    } finally {
+      setWelcomeDocsLoading(false);
     }
   };
 
@@ -48,6 +69,7 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
     if (!open) return;
     fetchStudent();
     fetchHistory();
+    fetchWelcomeDocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, studentId]);
 
@@ -61,20 +83,23 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
     return [...list].sort((a, b) => (a.number || 0) - (b.number || 0));
   }, [student]);
 
+  const startMarkPaid = (installmentNumber) => {
+    setPayingInst(installmentNumber);
+    setPayForm({ paymentMode: 'Cash', transactionId: '' });
+  };
+
   const handleMarkPaid = async (installmentNumber) => {
     if (!student?._id) return;
     setMarking(true);
     try {
-      const paymentMode = window.prompt('Payment mode (Cash / UPI / Card / Bank Transfer):', 'Cash') || 'Cash';
-      const transactionId = window.prompt('Transaction ID (optional):', '') || '';
-
       const res = await api.post(`/payments/students/${student._id}/mark-paid`, {
         installmentNumber,
-        paymentMode,
-        transactionId,
+        paymentMode: payForm.paymentMode || 'Cash',
+        transactionId: payForm.transactionId?.trim() || '',
       });
 
       toast.success(res.data?.message || 'Payment successful & receipt sent to student email');
+      setPayingInst(null);
       await fetchStudent();
       await fetchHistory();
       onUpdated?.();
@@ -100,6 +125,49 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
     document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  const handleDownloadAllDocuments = async () => {
+    if (!student?._id) return;
+    setDownloadingKit(true);
+    try {
+      const res = await api.get(`/students/${student._id}/welcome-kit/download`, {
+        responseType: 'blob',
+      });
+      const medium = student.examMedium || 'English';
+      const safeName = (student.fullName || 'student').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `WelcomeKit-${safeName}-${medium}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Welcome kit downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not download documents');
+    } finally {
+      setDownloadingKit(false);
+    }
+  };
+
+  const handleResendWelcomeKit = async () => {
+    if (!student?._id) return;
+    setResendingWelcome(true);
+    try {
+      const res = await api.post(`/students/${student._id}/resend-welcome`);
+      const msg = res.data?.message || 'Welcome kit email sent successfully';
+      if (res.data?.missingAttachments?.length) {
+        toast.warning(msg);
+      } else {
+        toast.success(msg);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not resend welcome kit');
+    } finally {
+      setResendingWelcome(false);
+    }
   };
 
   const handleResend = async (paymentId) => {
@@ -130,6 +198,78 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
           <div className="skeleton-loader" style={{ margin: 16 }}>Loading payment details…</div>
         ) : (
           <div style={{ padding: 16 }}>
+            <div className="app-card" style={{ marginBottom: 14 }}>
+              <div className="student-payment-card-title">Onboarding welcome kit</div>
+              <dl className="student-payment-dl" style={{ marginTop: 8 }}>
+                <dt>Email</dt>
+                <dd>{student.email || '—'}</dd>
+                <dt>Exam medium</dt>
+                <dd>{student.examMedium || 'English'}</dd>
+              </dl>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="app-btn app-btn-ghost app-btn-sm"
+                  disabled={welcomeDocsLoading}
+                  onClick={() => setShowDocPreview((v) => !v)}
+                >
+                  {showDocPreview ? 'Hide Documents' : 'Preview Documents'}
+                </button>
+                <button
+                  type="button"
+                  className="app-btn app-btn-ghost app-btn-sm"
+                  disabled={downloadingKit || welcomeDocs.every((d) => !d.exists)}
+                  onClick={handleDownloadAllDocuments}
+                >
+                  {downloadingKit ? 'Preparing…' : 'Download All Documents'}
+                </button>
+                <button
+                  type="button"
+                  className="app-btn app-btn-primary app-btn-sm"
+                  disabled={!student.email || resendingWelcome}
+                  onClick={handleResendWelcomeKit}
+                >
+                  {resendingWelcome ? 'Sending…' : 'Resend Welcome Kit'}
+                </button>
+              </div>
+              {showDocPreview && (
+                <div className="student-installment-list" style={{ marginTop: 12 }}>
+                  {welcomeDocsLoading ? (
+                    <p className="muted-text">Loading documents…</p>
+                  ) : welcomeDocs.length === 0 ? (
+                    <p className="muted-text">No documents configured.</p>
+                  ) : (
+                    welcomeDocs.map((doc) => (
+                      <div key={doc.key} className="student-installment-row paid">
+                        <div className="student-installment-main">
+                          <strong>{doc.label}</strong>
+                          <span className="muted-text">{doc.filename}</span>
+                        </div>
+                        <div className="student-installment-actions">
+                          {doc.exists ? (
+                            <button
+                              type="button"
+                              className="app-btn app-btn-ghost app-btn-sm"
+                              onClick={() => window.open(doc.previewUrl, '_blank', 'noopener,noreferrer')}
+                            >
+                              Open PDF
+                            </button>
+                          ) : (
+                            <span style={{ color: 'var(--danger)', fontSize: 12 }}>Missing on server</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+              {!student.email && (
+                <p className="muted-text" style={{ marginTop: 8, fontSize: 12 }}>
+                  Add a student email to send the welcome kit with PDF attachments.
+                </p>
+              )}
+            </div>
+
             <div className="student-payment-grid">
               <div className="app-card student-payment-card">
                 <div className="student-payment-card-title">Fee summary</div>
@@ -174,17 +314,60 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
                           </div>
                           <div className="student-installment-actions">
                             {statusBadge(inst.status)}
-                            {inst.status !== 'Paid' && (
+                            {inst.status !== 'Paid' && payingInst !== inst.number && (
                               <button
                                 type="button"
                                 className="app-btn app-btn-primary app-btn-sm"
                                 disabled={marking}
-                                onClick={() => handleMarkPaid(inst.number)}
+                                onClick={() => startMarkPaid(inst.number)}
                               >
-                                {marking ? 'Processing…' : inst.status === 'Partial' ? 'Pay Remaining' : 'Mark Paid'}
+                                {inst.status === 'Partial' ? 'Pay Remaining' : 'Mark Paid'}
                               </button>
                             )}
                           </div>
+                          {inst.status !== 'Paid' && payingInst === inst.number && (
+                            <div className="mark-paid-form full-width">
+                              <label>
+                                Payment mode
+                                <select
+                                  className="app-select"
+                                  value={payForm.paymentMode}
+                                  onChange={(e) => setPayForm((f) => ({ ...f, paymentMode: e.target.value }))}
+                                >
+                                  {PAYMENT_MODES.map((mode) => (
+                                    <option key={mode} value={mode}>{mode}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                Transaction ID (optional)
+                                <input
+                                  className="app-input"
+                                  value={payForm.transactionId}
+                                  onChange={(e) => setPayForm((f) => ({ ...f, transactionId: e.target.value }))}
+                                  placeholder="UPI ref, card last 4, NEFT UTR…"
+                                />
+                              </label>
+                              <div className="mark-paid-form-actions">
+                                <button
+                                  type="button"
+                                  className="app-btn app-btn-ghost app-btn-sm"
+                                  disabled={marking}
+                                  onClick={() => setPayingInst(null)}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  className="app-btn app-btn-primary app-btn-sm"
+                                  disabled={marking}
+                                  onClick={() => handleMarkPaid(inst.number)}
+                                >
+                                  {marking ? 'Processing…' : 'Confirm payment'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

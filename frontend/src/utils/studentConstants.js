@@ -12,4 +12,14 @@ export const ATTEMPT_OPTIONS = ['0 (Fresh)', '1', '2', '3+'];
 
 export const INSTALLMENT_PLANS = ['Full Payment', '2 Installments', '3 Installments', 'EMI'];
 
+export const PAYMENT_MODES = [
+  'Cash',
+  'UPI',
+  'Credit Card',
+  'Debit Card',
+  'Net Banking',
+  'Cheque',
+  'Bank Transfer',
+];
+
 export const COURSE_TYPES = ['Foundation', 'Prelims', 'Mains', 'Integrated', 'Test Series', 'Scholarship'];

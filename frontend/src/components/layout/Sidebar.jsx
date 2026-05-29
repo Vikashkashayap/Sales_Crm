@@ -58,6 +58,12 @@ function NavIcon({ name }) {
         <path d="M4 19V5M4 19h16M8 15l3-4 4 6 5-8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
+    settings: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round" />
+      </svg>
+    ),
     logout: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" strokeLinecap="round" />
@@ -150,6 +156,11 @@ export default function Sidebar({ basePath, isAdmin }) {
             <NavLink to={`${basePath}/upload`} className={navItemClass} title="Upload Leads">
               <NavIcon name="upload" />
               <span className="sidebar-link-label">Upload Leads</span>
+            </NavLink>
+            <p className="sidebar-section-label">Settings</p>
+            <NavLink to={`${basePath}/settings/documents`} className={navItemClass} title="Document Management">
+              <NavIcon name="settings" />
+              <span className="sidebar-link-label">Document Management</span>
             </NavLink>
           </>
         )}

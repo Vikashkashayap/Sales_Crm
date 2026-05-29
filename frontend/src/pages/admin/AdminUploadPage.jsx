@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import UploadExcel from '../../components/UploadExcel';
+import UploadPasteLeads from '../../components/UploadPasteLeads';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 
@@ -41,6 +42,7 @@ export default function AdminUploadPage() {
       <div className="app-card">
         <h2 className="section-heading">Upload Leads</h2>
         <UploadExcel />
+        <UploadPasteLeads />
       </div>
 
       <div className="app-card">

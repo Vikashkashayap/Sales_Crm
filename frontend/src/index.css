@@ -1352,6 +1352,7 @@ a:hover {
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 .toast-info { background: var(--primary); }
+.toast-warning { background: #d97706; }
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -1586,6 +1587,34 @@ a:hover {
 .installment-preview-row.status-partial { border-left: 3px solid var(--primary); }
 .installment-preview-row.status-paid { border-left: 3px solid var(--success); }
 .installment-preview-row.status-overdue { border-left: 3px solid var(--danger); }
+.mark-paid-form {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.mark-paid-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mark-paid-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.student-installment-row .mark-paid-form.full-width {
+  grid-column: 1 / -1;
+}
 .admissions-page .stat-mini {
   padding: 16px 20px;
   display: flex;

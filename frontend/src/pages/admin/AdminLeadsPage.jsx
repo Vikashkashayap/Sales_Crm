@@ -22,8 +22,8 @@ export default function AdminLeadsPage() {
   const [editLead, setEditLead] = useState(null);
   const [detailId, setDetailId] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 50 });
       if (filters.search) params.set('search', filters.search);
@@ -47,9 +47,23 @@ export default function AdminLeadsPage() {
     } catch (err) {
       toast.error('Failed to load leads');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [filters, page, toast]);
+
+  const silentRefresh = useCallback(() => fetchData({ silent: true }), [fetchData]);
+
+  const patchLead = useCallback((id, patch) => {
+    setLeads((prev) =>
+      prev.map((l) => (String(l._id) === String(id) ? { ...l, ...patch } : l))
+    );
+  }, []);
+
+  const removeLeads = useCallback((ids) => {
+    const idSet = new Set(ids.map(String));
+    setLeads((prev) => prev.filter((l) => !idSet.has(String(l._id))));
+    setTotal((t) => Math.max(0, t - idSet.size));
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(fetchData, 300);
@@ -63,7 +77,7 @@ export default function AdminLeadsPage() {
     handleStatusChange,
     handleRegisterClick,
     handleRegistrationSuccess,
-  } = useStudentRegistration(fetchData);
+  } = useStudentRegistration(silentRefresh);
 
   const handleExport = async () => {
     try {
@@ -103,12 +117,14 @@ export default function AdminLeadsPage() {
         {loading ? (
           <div className="skeleton-loader">Loading leads...</div>
         ) : view === 'kanban' ? (
-          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin salesUsers={salesUsers} onStatusChange={handleStatusChange} />
+          <KanbanBoard leads={leads} onRefresh={silentRefresh} isAdmin salesUsers={salesUsers} onStatusChange={handleStatusChange} />
         ) : (
           <>
             <LeadTable
               leads={leads}
-              onRefresh={fetchData}
+              onRefresh={silentRefresh}
+              onLeadPatched={patchLead}
+              onLeadsRemoved={removeLeads}
               isAdmin
               salesUsers={salesUsers}
               onViewLead={setDetailId}
@@ -128,8 +144,8 @@ export default function AdminLeadsPage() {
         )}
       </div>
 
-      <LeadFormModal open={showForm} lead={editLead} salesUsers={salesUsers} onClose={() => setShowForm(false)} onSuccess={fetchData} />
-      <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchData} />
+      <LeadFormModal open={showForm} lead={editLead} salesUsers={salesUsers} onClose={() => setShowForm(false)} onSuccess={silentRefresh} />
+      <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={silentRefresh} />
       <RegisterStudentModal
         open={!!registerLead}
         lead={registerLead}

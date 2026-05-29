@@ -16,6 +16,8 @@ import {
 import { generateReceiptNumber } from '../utils/receiptNumber.js';
 import { generateReceiptPdf } from '../utils/receiptPdf.js';
 import { sendReceiptEmail } from '../services/emailService.js';
+import { getAppSettings } from '../models/Settings.js';
+import { buildWelcomeKitAttachments, getStudentMedium } from '../utils/welcomeKitAttachments.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -275,9 +277,16 @@ export const markInstallmentPaid = async (req, res) => {
       receiptDirAbs: receiptsDirAbs,
       student,
       courseName: courseName || student.programName,
-      batch: batch || '',
+      batch: batch || student.targetYear || '',
+      courseType: student.courseType,
+      studentCode: student.studentCode || '',
+      installmentPlan: student.installmentPlan,
+      installments: synced,
+      totalFee: student.totalFee,
+      discount: student.discount,
+      finalFee: student.finalFee,
       installmentNumber: num,
-      amountPaid: paidInstAmount,
+      amountPaid: totalPaid,
       remainingAmount,
       paymentDate,
       paymentMode: paymentMode || 'Cash',
@@ -305,12 +314,21 @@ export const markInstallmentPaid = async (req, res) => {
 
     let emailSent = false;
     try {
+      const settings = await getAppSettings();
+      let extraAttachments = [];
+      if (settings.attachWelcomeKitWithReceipt) {
+        const kit = buildWelcomeKitAttachments(getStudentMedium(student));
+        extraAttachments = kit.attachments;
+      }
+
       await sendReceiptEmail({
         to: student.email,
         studentName: student.fullName,
         amountPaid: paidInstAmount,
         pdfPath: absPath,
         receiptNumber,
+        extraAttachments,
+        student,
       });
       emailSent = true;
       payment.emailSent = true;
@@ -360,12 +378,21 @@ export const resendReceiptEmail = async (req, res) => {
     if (!student.email) return res.status(400).json({ message: 'Student email is missing' });
     if (!payment.receiptPath) return res.status(400).json({ message: 'Receipt file path missing' });
 
+    const settings = await getAppSettings();
+    let extraAttachments = [];
+    if (settings.attachWelcomeKitWithReceipt) {
+      const kit = buildWelcomeKitAttachments(getStudentMedium(student));
+      extraAttachments = kit.attachments;
+    }
+
     await sendReceiptEmail({
       to: student.email,
       studentName: student.fullName,
       amountPaid: payment.amountPaid,
       pdfPath: payment.receiptPath,
       receiptNumber: payment.receiptNumber,
+      extraAttachments,
+      student,
     });
 
     payment.emailSent = true;

@@ -1,4 +1,40 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+import { buildWelcomeKitAttachments, getStudentMedium } from '../utils/welcomeKitAttachments.js';
+import { buildWelcomeReceiptAttachment } from '../utils/welcomeReceiptAttachment.js';
+import {
+  buildWelcomeEmailHtml,
+  buildWelcomeEmailSubject,
+  buildWelcomeEmailText,
+} from './welcomeEmailTemplate.js';
+import {
+  buildPaymentReminderEmailHtml,
+  buildPaymentReminderEmailSubject,
+  buildPaymentReminderEmailText,
+} from './paymentReminderEmailTemplate.js';
+import { logEmail } from '../utils/emailLogger.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WELCOME_LOGO_CID = 'mentorsdaily-logo@welcome';
+const REMINDER_LOGO_CID = 'mentorsdaily-logo@reminder';
+
+function getWelcomeLogoPath() {
+  const candidates = [
+    path.join(__dirname, '..', 'assets', 'mentors-daily-logo.png'),
+    path.join(process.cwd(), 'backend', 'assets', 'mentors-daily-logo.png'),
+  ];
+  return (
+    candidates.find((p) => {
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
+    }) || null
+  );
+}
 
 const required = (key) => {
   const v = process.env[key];
@@ -44,7 +80,6 @@ function createTransporter() {
   const user = required('EMAIL_USER');
   const pass = required('EMAIL_PASS');
 
-  // Works for Gmail + Google Workspace accounts using an app password.
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: Number(process.env.SMTP_PORT || 465),
@@ -59,24 +94,195 @@ export async function sendReceiptEmail({
   amountPaid,
   pdfPath,
   receiptNumber,
+  extraAttachments = [],
+  student = null,
 }) {
   const transporter = createTransporter();
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
 
+  const attachments = [
+    {
+      filename: `Receipt-${receiptNumber}.pdf`,
+      path: pdfPath,
+      contentType: 'application/pdf',
+    },
+    ...extraAttachments,
+  ];
+
+  const attachmentNames = attachments.map((a) => a.filename);
+
+  try {
+    const info = await transporter.sendMail({
+      from: `Mentors Daily <${from}>`,
+      to,
+      subject: 'Fee Payment Receipt - Mentors Daily',
+      html: buildReceiptEmailHtml({ studentName, amountPaid }),
+      attachments,
+    });
+
+    if (student?._id) {
+      await logEmail({
+        studentId: student._id,
+        studentName: student.fullName,
+        email: to,
+        emailType: 'receipt',
+        medium: getStudentMedium(student),
+        attachmentsSent: attachmentNames,
+        status: 'sent',
+      });
+    }
+
+    return info;
+  } catch (err) {
+    if (student?._id) {
+      await logEmail({
+        studentId: student._id,
+        studentName: student.fullName,
+        email: to,
+        emailType: 'receipt',
+        medium: getStudentMedium(student),
+        attachmentsSent: attachmentNames,
+        status: 'failed',
+        error: err.message,
+      });
+    }
+    throw err;
+  }
+}
+
+export async function sendWelcomeEmail(student, options = {}) {
+  const to = student?.email?.trim();
+  if (!to) {
+    throw new Error('Student email is missing');
+  }
+
+  const medium = getStudentMedium(student);
+  const logoPath = getWelcomeLogoPath();
+  const logoCid = logoPath ? WELCOME_LOGO_CID : null;
+  const html = buildWelcomeEmailHtml(student, { logoCid });
+  const text = buildWelcomeEmailText(student);
+  const subject = buildWelcomeEmailSubject(student);
+
+  const { attachments: kitAttachments, missing, foundPdfs } = buildWelcomeKitAttachments(medium);
+  if (missing.length) {
+    console.warn(
+      `[welcome-email] Missing PDFs for ${medium} (${missing.length}):`,
+      missing.join(', ')
+    );
+  }
+  console.log('[welcome-email] Found PDFs:', foundPdfs);
+
+  let receiptAttachment = null;
+  let receiptNumber = null;
+  try {
+    const receipt = await buildWelcomeReceiptAttachment(student, options);
+    receiptAttachment = receipt.attachment;
+    receiptNumber = receipt.receiptNumber;
+    if (receipt.generated) {
+      console.log('[welcome-email] Generated fee receipt:', receiptNumber);
+    }
+  } catch (err) {
+    console.error('[welcome-email] Fee receipt generation failed:', err.message);
+  }
+
+  const attachments = [
+    ...(logoPath
+      ? [{ filename: 'mentors-daily-logo.png', path: logoPath, cid: WELCOME_LOGO_CID }]
+      : []),
+    ...(receiptAttachment ? [receiptAttachment] : []),
+    ...kitAttachments,
+  ];
+
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const attachmentNames = attachments.map((a) => a.filename);
+
+  try {
+    const info = await transporter.sendMail({
+      from: `Mentors Daily <${from}>`,
+      to,
+      subject,
+      text,
+      html,
+      attachments,
+    });
+
+    await logEmail({
+      studentId: student._id,
+      studentName: student.fullName,
+      email: to,
+      emailType: 'welcome',
+      medium,
+      attachmentsSent: attachmentNames,
+      status: 'sent',
+    });
+
+    return {
+      info,
+      medium,
+      attachmentCount: attachments.length,
+      missingAttachments: missing,
+      receiptAttached: Boolean(receiptAttachment),
+      receiptNumber,
+    };
+  } catch (err) {
+    await logEmail({
+      studentId: student._id,
+      studentName: student.fullName,
+      email: to,
+      emailType: 'welcome',
+      medium,
+      attachmentsSent: attachmentNames,
+      status: 'failed',
+      error: err.message,
+    });
+    throw err;
+  }
+}
+
+export async function sendPaymentReminderEmail({
+  student,
+  installment,
+  type,
+  amountDue,
+  balanceDue,
+  medium = 'English',
+  daysBefore = 3,
+}) {
+  const to = student?.email?.trim();
+  if (!to) {
+    throw new Error('Student email is missing');
+  }
+
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+
+  const logoPath = getWelcomeLogoPath();
+  const logoCid = logoPath ? REMINDER_LOGO_CID : null;
+
+  const templatePayload = {
+    student,
+    installment,
+    type,
+    amountDue,
+    balanceDue,
+    medium,
+    daysBefore,
+    logoCid,
+  };
+
+  const attachments = logoPath
+    ? [{ filename: 'mentors-daily-logo.png', path: logoPath, cid: REMINDER_LOGO_CID }]
+    : [];
+
   const info = await transporter.sendMail({
     from: `Mentors Daily <${from}>`,
     to,
-    subject: 'Fee Payment Receipt - Mentors Daily',
-    html: buildReceiptEmailHtml({ studentName, amountPaid }),
-    attachments: [
-      {
-        filename: `Receipt-${receiptNumber}.pdf`,
-        path: pdfPath,
-        contentType: 'application/pdf',
-      },
-    ],
+    subject: buildPaymentReminderEmailSubject({ installment, type, medium }),
+    text: buildPaymentReminderEmailText(templatePayload),
+    html: buildPaymentReminderEmailHtml(templatePayload),
+    attachments,
   });
 
   return info;
 }
-

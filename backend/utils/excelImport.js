@@ -411,3 +411,83 @@ export function parseAllSheets(workbook) {
 
   return { parsed, sheetResults };
 }
+
+/** Parse tab/comma-separated text pasted from Excel (clipboard). */
+export function parsePastedGrid(text, sourceName = 'Paste Upload') {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) {
+    return { parsed: [], sheetResults: [{ sheet: sourceName, imported: 0, skipped: true, reason: 'empty' }] };
+  }
+
+  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim());
+  const matrix = lines.map((line) => {
+    const tabParts = line.split('\t');
+    if (tabParts.length > 1) return tabParts.map((c) => cellToString(c));
+    return line.split(',').map((c) => cellToString(c));
+  });
+
+  if (!matrix.length) {
+    return { parsed: [], sheetResults: [{ sheet: sourceName, imported: 0, skipped: true, reason: 'empty' }] };
+  }
+
+  let headerRow = findHeaderRowIndex(matrix);
+  if (headerRow < 0) headerRow = 0;
+
+  const headers = (matrix[headerRow] || []).map((h) => cellToString(h));
+  const dataRows = matrix.slice(headerRow + 1).filter((row) =>
+    row.some((c) => cellToString(c) !== '')
+  );
+
+  if (!dataRows.length) {
+    return {
+      parsed: [],
+      sheetResults: [{ sheet: sourceName, imported: 0, skipped: true, reason: 'no rows', headers: headers.filter(Boolean).slice(0, 12) }],
+    };
+  }
+
+  const cols = resolveColumns(headers, dataRows);
+  const content = detectColumnsFromContent(dataRows);
+
+  if (cols.nameIdx < 0 && content.nameIdx < 0) cols.nameIdx = content.nameIdx;
+  if (cols.emailIdx < 0) cols.emailIdx = content.emailIdx;
+  if (cols.mobileIdx < 0) cols.mobileIdx = content.mobileIdx;
+
+  const canImport =
+    (cols.nameIdx >= 0 || content.emailIdx >= 0) &&
+    (cols.mobileIdx >= 0 || cols.emailIdx >= 0 || content.mobileIdx >= 0 || content.emailIdx >= 0);
+
+  if (!canImport) {
+    return {
+      parsed: [],
+      sheetResults: [{
+        sheet: sourceName,
+        imported: 0,
+        skipped: true,
+        reason: 'columns not found',
+        headers: headers.filter(Boolean).slice(0, 12),
+      }],
+    };
+  }
+
+  const parsed = [];
+  let skippedEmpty = 0;
+
+  for (const row of dataRows) {
+    const lead = extractLeadFromRow(row, cols, sourceName);
+    if (!lead) {
+      skippedEmpty++;
+      continue;
+    }
+    parsed.push(lead);
+  }
+
+  return {
+    parsed,
+    sheetResults: [{
+      sheet: sourceName,
+      imported: parsed.length,
+      skippedEmpty,
+      skipped: parsed.length === 0,
+    }],
+  };
+}

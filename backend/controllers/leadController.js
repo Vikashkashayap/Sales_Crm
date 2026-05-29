@@ -1,7 +1,12 @@
 import Lead from '../models/Lead.js';
 import FollowUp from '../models/FollowUp.js';
 import * as XLSX from 'xlsx';
-import { normalizeEmail, normalizeMobile, parseAllSheets } from '../utils/excelImport.js';
+import {
+  normalizeEmail,
+  normalizeMobile,
+  parseAllSheets,
+  parsePastedGrid,
+} from '../utils/excelImport.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification } from '../utils/notifications.js';
 import { buildRoleFilter } from '../utils/leadHelpers.js';
@@ -495,6 +500,115 @@ export const getLeadHistory = async (req, res) => {
   }
 };
 
+const importParsedLeads = async (req, res, { parsed, sheetResults, activityLabel, defaultSource, emptyPayload }) => {
+  const importedSheets = sheetResults.filter((s) => s.imported > 0).map((s) => s.sheet);
+  const emptySheets = sheetResults.filter((s) => s.skipped).map((s) => s.sheet);
+
+  if (parsed.length === 0) {
+    return res.status(400).json({
+      sheetResults,
+      ...emptyPayload,
+    });
+  }
+
+  const existingLeads = await Lead.find({ isDeleted: { $ne: true } })
+    .select('mobile email name')
+    .lean();
+
+  const existingMobiles = new Set();
+  const existingEmails = new Set();
+  for (const l of existingLeads) {
+    if (l.mobile) {
+      existingMobiles.add(l.mobile.trim().toLowerCase());
+      const norm = normalizeMobile(l.mobile);
+      if (norm) existingMobiles.add(norm);
+    }
+    const em = normalizeEmail(l.email);
+    if (em) existingEmails.add(em);
+  }
+
+  const skippedDuplicates = [];
+  const toInsert = [];
+  const seenInFile = new Set();
+
+  for (const row of parsed) {
+    const mobileKey = normalizeMobile(row.mobile) || row.mobile.trim().toLowerCase();
+    const emailKey = normalizeEmail(row.email);
+    const dedupeKey = mobileKey || emailKey;
+
+    if (!dedupeKey) continue;
+
+    if (
+      seenInFile.has(dedupeKey) ||
+      existingMobiles.has(mobileKey) ||
+      existingMobiles.has(row.mobile.trim().toLowerCase()) ||
+      (emailKey && existingEmails.has(emailKey))
+    ) {
+      skippedDuplicates.push({ name: row.name, mobile: row.mobile, email: row.email, source: row.source });
+      continue;
+    }
+
+    seenInFile.add(dedupeKey);
+    existingMobiles.add(mobileKey);
+    existingMobiles.add(row.mobile.trim().toLowerCase());
+    if (emailKey) existingEmails.add(emailKey);
+
+    toInsert.push({
+      name: row.name,
+      mobile: normalizeMobile(row.mobile) || row.mobile,
+      email: emailKey || '',
+      city: row.city || '',
+      platform: row.platform || '',
+      targetYear: row.targetYear || '',
+      requirement: row.requirement || '',
+      dateOfBirth: row.dateOfBirth || '',
+      gender: row.gender || '',
+      source: row.source || defaultSource,
+      company: row.company || '',
+      status: 'New',
+      assignedTo: null,
+      createdBy: req.user._id,
+    });
+  }
+
+  if (toInsert.length === 0) {
+    return res.status(400).json({
+      message: `All ${parsed.length} row(s) already exist in CRM.`,
+      skippedDuplicates: skippedDuplicates.length,
+      sheetsProcessed: importedSheets,
+      sheetResults,
+      hint: 'Duplicates matched by mobile or email. Delete old leads or upload only new rows.',
+    });
+  }
+
+  const result = await Lead.insertMany(toInsert);
+
+  await logActivity({
+    leadId: null,
+    userId: req.user._id,
+    type: 'lead_created',
+    description: `Imported ${result.length} leads from ${activityLabel} (${importedSheets.join(', ')})`,
+    metadata: {
+      count: result.length,
+      skippedDuplicates: skippedDuplicates.length,
+      sheets: importedSheets,
+    },
+  });
+
+  const parts = [`${result.length} lead(s) imported`, `(${importedSheets.join(', ')})`];
+  if (skippedDuplicates.length) parts.push(`${skippedDuplicates.length} duplicate(s) skipped`);
+  if (emptySheets.length) parts.push(`${emptySheets.length} empty/skipped tab(s)`);
+
+  return res.status(201).json({
+    message: parts.join('. ') + '.',
+    count: result.length,
+    skippedDuplicates: skippedDuplicates.length,
+    sheetsProcessed: importedSheets,
+    sheetResults,
+    duplicates: skippedDuplicates.slice(0, 20),
+  });
+};
+
 export const uploadExcel = async (req, res) => {
   try {
     if (!req.file) {
@@ -503,117 +617,42 @@ export const uploadExcel = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false });
     const { parsed, sheetResults } = parseAllSheets(workbook);
 
-    const importedSheets = sheetResults.filter((s) => s.imported > 0).map((s) => s.sheet);
-    const emptySheets = sheetResults.filter((s) => s.skipped).map((s) => s.sheet);
-
-    if (parsed.length === 0) {
-      return res.status(400).json({
+    return importParsedLeads(req, res, {
+      parsed,
+      sheetResults,
+      activityLabel: 'Excel',
+      defaultSource: 'Excel Upload',
+      emptyPayload: {
         message:
           'No valid leads found in any sheet. Each tab needs Name + Phone or Email columns.',
         sheets: workbook.SheetNames,
-        sheetResults,
         hint: 'Supported tabs: WebsiteFormData, Prelims confidence Batch, FormResponses, etc.',
-      });
-    }
-
-    const existingLeads = await Lead.find({ isDeleted: { $ne: true } })
-      .select('mobile email name')
-      .lean();
-
-    const existingMobiles = new Set();
-    const existingEmails = new Set();
-    for (const l of existingLeads) {
-      if (l.mobile) {
-        existingMobiles.add(l.mobile.trim().toLowerCase());
-        const norm = normalizeMobile(l.mobile);
-        if (norm) existingMobiles.add(norm);
-      }
-      const em = normalizeEmail(l.email);
-      if (em) existingEmails.add(em);
-    }
-
-    const skippedDuplicates = [];
-    const toInsert = [];
-    const seenInFile = new Set();
-
-    for (const row of parsed) {
-      const mobileKey = normalizeMobile(row.mobile) || row.mobile.trim().toLowerCase();
-      const emailKey = normalizeEmail(row.email);
-      const dedupeKey = mobileKey || emailKey;
-
-      if (!dedupeKey) continue;
-
-      if (
-        seenInFile.has(dedupeKey) ||
-        existingMobiles.has(mobileKey) ||
-        existingMobiles.has(row.mobile.trim().toLowerCase()) ||
-        (emailKey && existingEmails.has(emailKey))
-      ) {
-        skippedDuplicates.push({ name: row.name, mobile: row.mobile, email: row.email, source: row.source });
-        continue;
-      }
-
-      seenInFile.add(dedupeKey);
-      existingMobiles.add(mobileKey);
-      existingMobiles.add(row.mobile.trim().toLowerCase());
-      if (emailKey) existingEmails.add(emailKey);
-
-      toInsert.push({
-        name: row.name,
-        mobile: normalizeMobile(row.mobile) || row.mobile,
-        email: emailKey || '',
-        city: row.city || '',
-        platform: row.platform || '',
-        targetYear: row.targetYear || '',
-        requirement: row.requirement || '',
-        dateOfBirth: row.dateOfBirth || '',
-        gender: row.gender || '',
-        source: row.source || 'Excel Upload',
-        company: row.company || '',
-        status: 'New',
-        assignedTo: null,
-        createdBy: req.user._id,
-      });
-    }
-
-    if (toInsert.length === 0) {
-      return res.status(400).json({
-        message: `All ${parsed.length} row(s) from ${importedSheets.length} sheet(s) already exist in CRM.`,
-        skippedDuplicates: skippedDuplicates.length,
-        sheetsProcessed: importedSheets,
-        sheetResults,
-        hint: 'Duplicates matched by mobile or email. Delete old leads or upload only new rows.',
-      });
-    }
-
-    const result = await Lead.insertMany(toInsert);
-
-    await logActivity({
-      leadId: null,
-      userId: req.user._id,
-      type: 'lead_created',
-      description: `Imported ${result.length} leads from Excel (${importedSheets.join(', ')})`,
-      metadata: {
-        count: result.length,
-        skippedDuplicates: skippedDuplicates.length,
-        sheets: importedSheets,
       },
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
 
-    const parts = [
-      `${result.length} lead(s) imported from ${importedSheets.length} sheet(s)`,
-      `(${importedSheets.join(', ')})`,
-    ];
-    if (skippedDuplicates.length) parts.push(`${skippedDuplicates.length} duplicate(s) skipped`);
-    if (emptySheets.length) parts.push(`${emptySheets.length} empty/skipped tab(s)`);
+export const uploadPastedLeads = async (req, res) => {
+  try {
+    const { text, source } = req.body;
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ message: 'Paste Excel data first (copy rows, then Ctrl+V here).' });
+    }
+    const sourceName = String(source || 'Paste Upload').trim() || 'Paste Upload';
+    const { parsed, sheetResults } = parsePastedGrid(text, sourceName);
 
-    res.status(201).json({
-      message: parts.join('. ') + '.',
-      count: result.length,
-      skippedDuplicates: skippedDuplicates.length,
-      sheetsProcessed: importedSheets,
+    return importParsedLeads(req, res, {
+      parsed,
       sheetResults,
-      duplicates: skippedDuplicates.slice(0, 20),
+      activityLabel: 'paste',
+      defaultSource: sourceName,
+      emptyPayload: {
+        message: 'No valid leads found. Include a header row with Name and Phone or Email columns.',
+        hint: 'Copy rows from Excel (Ctrl+C) and paste here. Column tabs from Excel are detected automatically.',
+        headers: sheetResults.find((s) => s.headers)?.headers,
+      },
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });

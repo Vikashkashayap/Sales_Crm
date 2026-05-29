@@ -10,6 +10,7 @@ import {
   generateStudentCode,
   ensureStudentInstallments,
 } from '../utils/paymentHelpers.js';
+import { sendWelcomeEmail } from '../services/emailService.js';
 
 const toObjectId = (id, fallback) => {
   if (!id || id === 'null' || id === 'undefined') return fallback;
@@ -158,6 +159,8 @@ export const createStudent = async (req, res) => {
       installmentPlan,
       installmentStartDate,
       amountPaid,
+      paymentMode,
+      transactionId,
       notes,
     } = req.body;
 
@@ -266,7 +269,45 @@ export const createStudent = async (req, res) => {
     });
 
     const populated = await Student.findById(student._id).populate(populateOpts);
-    res.status(201).json(populated);
+
+    let welcomeEmailSent = false;
+    let welcomeEmailMessage = '';
+    let welcomeEmailWarning = false;
+    if (populated.email) {
+      try {
+        const result = await sendWelcomeEmail(populated, {
+          paymentMode: paymentMode?.trim() || 'Cash',
+          transactionId: transactionId?.trim() || '',
+        });
+        welcomeEmailSent = true;
+        const receiptNote = result.receiptAttached
+          ? ' Fee invoice attached.'
+          : Number(populated.finalFee) > 0
+            ? ''
+            : ' No fee invoice (fee not set).';
+        if (result.missingAttachments?.length) {
+          welcomeEmailMessage =
+            `Welcome email sent.${receiptNote} Some PDF attachments were missing on the server.`;
+          welcomeEmailWarning = true;
+        } else {
+          welcomeEmailMessage = `Welcome email sent to student.${receiptNote}`;
+        }
+      } catch (e) {
+        welcomeEmailMessage =
+          e.message || 'Student registered, but welcome email could not be sent.';
+        welcomeEmailWarning = true;
+        console.error('[createStudent] welcome email failed:', e.message);
+      }
+    } else {
+      welcomeEmailMessage = 'Student registered. Add an email address to send the welcome kit.';
+    }
+
+    res.status(201).json({
+      ...(populated.toObject ? populated.toObject() : populated),
+      welcomeEmailSent,
+      welcomeEmailMessage,
+      welcomeEmailWarning,
+    });
   } catch (error) {
     if (error.name === 'ValidationError') {
       const message = Object.values(error.errors || {})
@@ -306,6 +347,45 @@ export const createStudent = async (req, res) => {
       });
     }
     res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const resendWelcomeEmail = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id).populate(populateOpts);
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    const registeredById = student.registeredBy?._id || student.registeredBy;
+    const assignedBdaId = student.assignedBda?._id || student.assignedBda;
+    if (
+      req.user.role !== 'admin' &&
+      String(registeredById) !== String(req.user._id) &&
+      String(assignedBdaId) !== String(req.user._id)
+    ) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    if (!student.email) {
+      return res.status(400).json({ message: 'Student email is missing. Please add student email first.' });
+    }
+
+    const result = await sendWelcomeEmail(student);
+    const attachmentNote =
+      result.missingAttachments?.length > 0
+        ? ` (${result.missingAttachments.length} PDF(s) missing on server)`
+        : '';
+    const receiptNote = result.receiptAttached ? ' Fee invoice attached.' : '';
+
+    res.json({
+      message: `Welcome email sent successfully.${receiptNote}${attachmentNote}`,
+      medium: result.medium,
+      attachmentCount: result.attachmentCount,
+      missingAttachments: result.missingAttachments,
+      receiptAttached: result.receiptAttached,
+      receiptNumber: result.receiptNumber,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Could not send welcome email' });
   }
 };
 

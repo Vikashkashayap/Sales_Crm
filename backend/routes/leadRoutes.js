@@ -10,6 +10,7 @@ import {
   bulkAssignLeads,
   bulkDeleteLeads,
   uploadExcel,
+  uploadPastedLeads,
   checkDuplicates,
   getLeadHistory,
   exportLeads,
@@ -24,6 +25,7 @@ router.use(protect);
 router.get('/export', adminOnly, exportLeads);
 router.get('/check-duplicate', checkDuplicates);
 router.post('/upload-excel', adminOnly, upload.single('file'), uploadExcel);
+router.post('/upload-paste', adminOnly, uploadPastedLeads);
 router.put('/assign/:id', adminOnly, assignLead);
 router.post('/bulk-assign', adminOnly, bulkAssignLeads);
 router.post('/bulk-delete', adminOnly, bulkDeleteLeads);

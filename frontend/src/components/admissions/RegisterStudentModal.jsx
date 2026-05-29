@@ -7,6 +7,7 @@ import {
   ATTEMPT_OPTIONS,
   INSTALLMENT_PLANS,
   COURSE_TYPES,
+  PAYMENT_MODES,
 } from '../../utils/studentConstants';
 import {
   buildInstallmentPreview,
@@ -91,6 +92,8 @@ function leadToForm(lead, salesUsers = []) {
     discount: '',
     installmentPlan: 'Full Payment',
     amountPaid: '',
+    paymentMode: 'Cash',
+    transactionId: '',
     installmentStartDate: new Date().toISOString().slice(0, 10),
     notes: lead.requirement || '',
   };
@@ -120,6 +123,8 @@ const emptyForm = {
   discount: '',
   installmentPlan: 'Full Payment',
   amountPaid: '',
+  paymentMode: 'Cash',
+  transactionId: '',
   installmentStartDate: new Date().toISOString().slice(0, 10),
   notes: '',
 };
@@ -296,13 +301,26 @@ export default function RegisterStudentModal({
           ? null
           : (form.installmentStartDate ? `${form.installmentStartDate}T00:00:00` : null),
         amountPaid: form.amountPaid === '' ? 0 : Number(form.amountPaid),
+        paymentMode: form.paymentMode || 'Cash',
+        transactionId: form.transactionId?.trim() || '',
         notes: form.notes,
       };
       if (form.leadId) payload.leadId = form.leadId;
       if (form.assignedBda) payload.assignedBda = form.assignedBda;
 
-      await api.post('/students', payload);
-      toast.success('Student registered successfully');
+      const res = await api.post('/students', payload);
+      if (res.data?.welcomeEmailSent && !res.data?.welcomeEmailWarning) {
+        toast.success(res.data?.welcomeEmailMessage || 'Student registered and welcome kit email sent');
+      } else if (res.data?.welcomeEmailMessage) {
+        const msg = `Student registered. ${res.data.welcomeEmailMessage}`;
+        if (res.data?.welcomeEmailWarning) {
+          toast.warning(msg);
+        } else {
+          toast.info(msg);
+        }
+      } else {
+        toast.success('Student registered successfully');
+      }
       onSuccess?.();
       onClose?.();
     } catch (err) {
@@ -466,6 +484,32 @@ export default function RegisterStudentModal({
                   </span>
                 )}
               </label>
+              <label>Payment mode
+                <select
+                  className="app-select"
+                  value={form.paymentMode}
+                  onChange={(e) => set('paymentMode', e.target.value)}
+                >
+                  {PAYMENT_MODES.map((mode) => (
+                    <option key={mode} value={mode}>{mode}</option>
+                  ))}
+                </select>
+                <span className="field-hint">Shown on the fee receipt / invoice sent to the student.</span>
+              </label>
+              {(form.paymentMode === 'UPI' ||
+                form.paymentMode === 'Credit Card' ||
+                form.paymentMode === 'Debit Card' ||
+                form.paymentMode === 'Net Banking' ||
+                form.paymentMode === 'Bank Transfer') && (
+                <label>Transaction / reference ID (optional)
+                  <input
+                    className="app-input"
+                    value={form.transactionId}
+                    onChange={(e) => set('transactionId', e.target.value)}
+                    placeholder="e.g. UPI ref, last 4 digits, NEFT UTR"
+                  />
+                </label>
+              )}
               {finalFee > 0 && (
                 <InstallmentSchedule
                   installments={installmentPreview}
@@ -491,6 +535,12 @@ export default function RegisterStudentModal({
                 <dt>Final Fee</dt><dd>₹{finalFee.toLocaleString('en-IN')}</dd>
                 <dt>Plan</dt><dd>{form.installmentPlan === 'EMI' ? 'EMI (6 monthly payments)' : form.installmentPlan}</dd>
                 <dt>Registration amount</dt><dd>{fmtInr(amountPaidNum)}</dd>
+                <dt>Payment mode</dt><dd>{form.paymentMode || 'Cash'}</dd>
+                {form.transactionId && (
+                  <>
+                    <dt>Transaction ID</dt><dd>{form.transactionId}</dd>
+                  </>
+                )}
                 <dt>Balance due</dt><dd>{fmtInr(balanceDue)}</dd>
                 {lead && (
                   <>

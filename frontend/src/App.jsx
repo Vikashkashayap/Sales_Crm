@@ -7,6 +7,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminUploadPage from './pages/admin/AdminUploadPage';
+import AdminDocumentManagementPage from './pages/admin/AdminDocumentManagementPage';
 import AdminFollowUpsPage from './pages/admin/AdminFollowUpsPage';
 import AdminBDAPerformancePage from './pages/admin/AdminBDAPerformancePage';
 import SalesDashboardPage from './pages/sales/SalesDashboardPage';
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="followups" element={<AdminFollowUpsPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="upload" element={<AdminUploadPage />} />
+        <Route path="settings/documents" element={<AdminDocumentManagementPage />} />
         <Route path="admissions" element={<AdmissionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />
       </Route>

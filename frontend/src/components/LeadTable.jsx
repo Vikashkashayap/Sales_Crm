@@ -11,6 +11,8 @@ const isConvertedLead = (status) => CONVERTED_STATUSES.includes(status);
 export default function LeadTable({
   leads,
   onRefresh,
+  onLeadPatched,
+  onLeadsRemoved,
   isAdmin,
   salesUsers = [],
   onViewLead,
@@ -77,6 +79,7 @@ export default function LeadTable({
     const prevPatch = leadPatches[id] || {};
 
     setLeadPatches((prev) => ({ ...prev, [id]: { ...prev[id], ...payload } }));
+    onLeadPatched?.(id, payload);
 
     try {
       await api.put(`/leads/${id}`, payload);
@@ -94,12 +97,18 @@ export default function LeadTable({
         const reverted = { ...(prev[id] || {}) };
         Object.keys(payload).forEach((key) => {
           if (key in prevPatch) reverted[key] = prevPatch[key];
+          else if (key in lead) reverted[key] = lead[key];
           else delete reverted[key];
         });
         if (Object.keys(reverted).length) next[id] = reverted;
         else delete next[id];
         return next;
       });
+      const rollback = {};
+      Object.keys(payload).forEach((key) => {
+        rollback[key] = key in prevPatch ? prevPatch[key] : lead[key];
+      });
+      onLeadPatched?.(id, rollback);
       alert(err.response?.data?.message || 'Update failed');
     }
   };
@@ -113,7 +122,7 @@ export default function LeadTable({
         next.delete(id);
         return next;
       });
-      onRefresh?.();
+      onLeadsRemoved?.([id]);
     } catch (err) {
       alert(err.response?.data?.message || 'Delete failed');
     }
@@ -124,10 +133,11 @@ export default function LeadTable({
     if (!isAdmin || count === 0) return;
     if (!window.confirm(`Delete ${count} selected lead(s)? This cannot be undone.`)) return;
     setSaving(true);
+    const ids = [...selectedIds];
     try {
-      await api.post('/leads/bulk-delete', { ids: [...selectedIds] });
+      await api.post('/leads/bulk-delete', { ids });
       clearSelection();
-      onRefresh?.();
+      onLeadsRemoved?.(ids);
     } catch (err) {
       alert(err.response?.data?.message || 'Bulk delete failed');
     } finally {
@@ -137,28 +147,37 @@ export default function LeadTable({
 
   const handleAssign = async (id, assignedTo) => {
     if (!isAdmin) return;
-    setSaving(true);
+    const lead = leads.find((l) => String(l._id) === String(id));
+    const prevAssigned = lead?.assignedTo;
+    const nextAssigned = assignedTo
+      ? salesUsers.find((u) => String(u._id) === String(assignedTo)) || assignedTo
+      : null;
+
+    onLeadPatched?.(id, { assignedTo: nextAssigned });
+
     try {
       await api.put(`/leads/assign/${id}`, { assignedTo: assignedTo || null });
-      onRefresh?.();
     } catch (err) {
+      onLeadPatched?.(id, { assignedTo: prevAssigned });
       alert(err.response?.data?.message || 'Assign failed');
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleBulkAssign = async () => {
     if (!isAdmin || selectedIds.size === 0) return;
     setSaving(true);
+    const ids = [...selectedIds];
+    const nextAssigned = bulkAssignTo
+      ? salesUsers.find((u) => String(u._id) === String(bulkAssignTo)) || bulkAssignTo
+      : null;
     try {
       await api.post('/leads/bulk-assign', {
-        ids: [...selectedIds],
+        ids,
         assignedTo: bulkAssignTo || null,
       });
+      ids.forEach((id) => onLeadPatched?.(id, { assignedTo: nextAssigned }));
       clearSelection();
       setBulkAssignTo('');
-      onRefresh?.();
     } catch (err) {
       alert(err.response?.data?.message || 'Bulk assign failed');
     } finally {
@@ -322,11 +341,15 @@ export default function LeadTable({
                   <input
                     type="number"
                     placeholder="Fee"
-                    key={`fee-${lead._id}-${row.dealValue ?? ''}`}
+                    key={`fee-${lead._id}`}
                     defaultValue={row.dealValue ?? ''}
                     onBlur={(e) => {
                       const v = e.target.value;
-                      handleInlineUpdate(lead._id, { dealValue: v === '' ? null : Number(v) }, lead);
+                      const newVal = v === '' ? null : Number(v);
+                      const current = row.dealValue ?? null;
+                      if (newVal === current) return;
+                      if (newVal === null && (current === null || current === '' || current === undefined)) return;
+                      handleInlineUpdate(lead._id, { dealValue: newVal }, lead);
                     }}
                     className="app-input"
                     style={{ width: 90 }}

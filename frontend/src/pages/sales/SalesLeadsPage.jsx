@@ -14,8 +14,8 @@ export default function SalesLeadsPage() {
   const [filters, setFilters] = useState({ search: '', status: '', priority: '' });
   const [detailId, setDetailId] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({ limit: 100 });
       if (filters.search) params.set('search', filters.search);
@@ -27,9 +27,22 @@ export default function SalesLeadsPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [filters]);
+
+  const silentRefresh = useCallback(() => fetchData({ silent: true }), [fetchData]);
+
+  const patchLead = useCallback((id, patch) => {
+    setLeads((prev) =>
+      prev.map((l) => (String(l._id) === String(id) ? { ...l, ...patch } : l))
+    );
+  }, []);
+
+  const removeLeads = useCallback((ids) => {
+    const idSet = new Set(ids.map(String));
+    setLeads((prev) => prev.filter((l) => !idSet.has(String(l._id))));
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(fetchData, 300);
@@ -43,7 +56,7 @@ export default function SalesLeadsPage() {
     handleStatusChange,
     handleRegisterClick,
     handleRegistrationSuccess,
-  } = useStudentRegistration(fetchData);
+  } = useStudentRegistration(silentRefresh);
 
   return (
     <div>
@@ -61,11 +74,13 @@ export default function SalesLeadsPage() {
         {loading ? (
           <div className="skeleton-loader">Loading...</div>
         ) : view === 'kanban' ? (
-          <KanbanBoard leads={leads} onRefresh={fetchData} isAdmin={false} onStatusChange={handleStatusChange} />
+          <KanbanBoard leads={leads} onRefresh={silentRefresh} isAdmin={false} onStatusChange={handleStatusChange} />
         ) : (
           <LeadTable
             leads={leads}
-            onRefresh={fetchData}
+            onRefresh={silentRefresh}
+            onLeadPatched={patchLead}
+            onLeadsRemoved={removeLeads}
             isAdmin={false}
             onViewLead={setDetailId}
             registeredLeadIds={registeredLeadIds}
@@ -74,7 +89,7 @@ export default function SalesLeadsPage() {
           />
         )}
       </div>
-      <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={fetchData} />
+      <LeadDetailDrawer leadId={detailId} onClose={() => setDetailId(null)} onRefresh={silentRefresh} />
       <RegisterStudentModal
         open={!!registerLead}
         lead={registerLead}
