@@ -6,6 +6,8 @@ import { logActivity } from '../utils/activityLogger.js';
 import { buildStudentFilter } from '../utils/studentPaymentFilter.js';
 import {
   buildInstallments,
+  resolveInstallments,
+  getInstallmentBalanceTotal,
   derivePaymentStatus,
   generateStudentCode,
   ensureStudentInstallments,
@@ -159,6 +161,7 @@ export const createStudent = async (req, res) => {
       installmentPlan,
       installmentStartDate,
       amountPaid,
+      installments: customInstallments,
       paymentMode,
       transactionId,
       notes,
@@ -201,7 +204,8 @@ export const createStudent = async (req, res) => {
       installmentStartDate && !Number.isNaN(new Date(installmentStartDate).getTime())
         ? new Date(installmentStartDate)
         : new Date();
-    const installments = buildInstallments(finalFee, plan, startDate, paid);
+    const installments = resolveInstallments(finalFee, plan, startDate, paid, customInstallments);
+    const balanceAfterRegistration = getInstallmentBalanceTotal(finalFee, paid);
     const hasOverdue = installments.some((i) => i.status === 'Overdue');
     const isScholarship = (courseType || '').trim() === 'Scholarship';
 
@@ -228,7 +232,7 @@ export const createStudent = async (req, res) => {
       installmentPlan: plan,
       installments,
       amountPaid: paid,
-      installmentStartDate: plan === 'Full Payment' ? null : startDate,
+      installmentStartDate: balanceAfterRegistration > 0 ? startDate : null,
       paymentStatus: derivePaymentStatus(finalFee, paid, hasOverdue),
       refundEligible: isScholarship,
       status: 'Onboarding',
@@ -309,6 +313,9 @@ export const createStudent = async (req, res) => {
       welcomeEmailWarning,
     });
   } catch (error) {
+    if (error.statusCode === 400) {
+      return res.status(400).json({ message: error.message || 'Invalid installment schedule' });
+    }
     if (error.name === 'ValidationError') {
       const message = Object.values(error.errors || {})
         .map((e) => e.message)

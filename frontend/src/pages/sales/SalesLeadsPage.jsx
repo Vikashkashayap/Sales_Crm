@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 import LeadTable from '../../components/LeadTable';
 import LeadFilters from '../../components/leads/LeadFilters';
 import KanbanBoard from '../../components/leads/KanbanBoard';
@@ -8,7 +9,9 @@ import RegisterStudentModal from '../../components/admissions/RegisterStudentMod
 import { useStudentRegistration } from '../../hooks/useStudentRegistration';
 
 export default function SalesLeadsPage() {
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
+  const [salesUsers, setSalesUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('table');
   const [filters, setFilters] = useState({ search: '', status: '', priority: '' });
@@ -30,6 +33,12 @@ export default function SalesLeadsPage() {
       if (!silent) setLoading(false);
     }
   }, [filters]);
+
+  useEffect(() => {
+    api.get('/users/sales')
+      .then((res) => setSalesUsers(res.data || []))
+      .catch(() => setSalesUsers([]));
+  }, []);
 
   const silentRefresh = useCallback(() => fetchData({ silent: true }), [fetchData]);
 
@@ -82,6 +91,9 @@ export default function SalesLeadsPage() {
             onLeadPatched={patchLead}
             onLeadsRemoved={removeLeads}
             isAdmin={false}
+            canTransferLeads
+            currentUserId={user?._id}
+            salesUsers={salesUsers}
             onViewLead={setDetailId}
             registeredLeadIds={registeredLeadIds}
             onStatusChange={handleStatusChange}

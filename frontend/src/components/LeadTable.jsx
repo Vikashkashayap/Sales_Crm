@@ -14,6 +14,8 @@ export default function LeadTable({
   onLeadPatched,
   onLeadsRemoved,
   isAdmin,
+  canTransferLeads = false,
+  currentUserId,
   salesUsers = [],
   onViewLead,
   onEditLead,
@@ -27,17 +29,14 @@ export default function LeadTable({
   const [bulkAssignTo, setBulkAssignTo] = useState('');
 
   const leadIds = useMemo(() => leads.map((l) => l._id), [leads]);
+  const showSelection = isAdmin || canTransferLeads;
+  const showAssignColumn = isAdmin || canTransferLeads;
+  const assignUsers = useMemo(() => {
+    if (isAdmin || !canTransferLeads || !currentUserId) return salesUsers;
+    return salesUsers.filter((u) => String(u._id) !== String(currentUserId));
+  }, [salesUsers, isAdmin, canTransferLeads, currentUserId]);
 
-  const showOptionalCols = useMemo(() => {
-    const has = (fn) => leads.some(fn);
-    return {
-      platform: has((l) => l.platform),
-      targetYear: has((l) => l.targetYear),
-      requirement: has((l) => l.requirement),
-      dateOfBirth: has((l) => l.dateOfBirth),
-      gender: has((l) => l.gender),
-    };
-  }, [leads]);
+  const showPlatformCol = useMemo(() => leads.some((l) => l.platform), [leads]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -146,7 +145,8 @@ export default function LeadTable({
   };
 
   const handleAssign = async (id, assignedTo) => {
-    if (!isAdmin) return;
+    if (!isAdmin && !canTransferLeads) return;
+    if (canTransferLeads && !isAdmin && !assignedTo) return;
     const lead = leads.find((l) => String(l._id) === String(id));
     const prevAssigned = lead?.assignedTo;
     const nextAssigned = assignedTo
@@ -157,14 +157,31 @@ export default function LeadTable({
 
     try {
       await api.put(`/leads/assign/${id}`, { assignedTo: assignedTo || null });
+      if (
+        canTransferLeads &&
+        !isAdmin &&
+        assignedTo &&
+        String(assignedTo) !== String(currentUserId)
+      ) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        onLeadsRemoved?.([id]);
+      }
     } catch (err) {
       onLeadPatched?.(id, { assignedTo: prevAssigned });
-      alert(err.response?.data?.message || 'Assign failed');
+      alert(err.response?.data?.message || 'Transfer failed');
     }
   };
 
   const handleBulkAssign = async () => {
-    if (!isAdmin || selectedIds.size === 0) return;
+    if ((!isAdmin && !canTransferLeads) || selectedIds.size === 0) return;
+    if (canTransferLeads && !isAdmin && !bulkAssignTo) {
+      alert('Select a BDA to transfer leads to');
+      return;
+    }
     setSaving(true);
     const ids = [...selectedIds];
     const nextAssigned = bulkAssignTo
@@ -176,10 +193,13 @@ export default function LeadTable({
         assignedTo: bulkAssignTo || null,
       });
       ids.forEach((id) => onLeadPatched?.(id, { assignedTo: nextAssigned }));
+      if (canTransferLeads && !isAdmin && bulkAssignTo) {
+        onLeadsRemoved?.(ids);
+      }
       clearSelection();
       setBulkAssignTo('');
     } catch (err) {
-      alert(err.response?.data?.message || 'Bulk assign failed');
+      alert(err.response?.data?.message || 'Bulk transfer failed');
     } finally {
       setSaving(false);
     }
@@ -191,14 +211,16 @@ export default function LeadTable({
 
   return (
     <div>
-      {isAdmin && someSelected && (
+      {showSelection && someSelected && (
         <div className="bulk-actions-bar">
           <span className="bulk-actions-count">{selectedIds.size} selected</span>
           <div className="bulk-actions-controls">
             <AssignDropdown
-              users={salesUsers}
+              users={assignUsers}
               value={bulkAssignTo}
               onChange={(v) => setBulkAssignTo(v || '')}
+              allowUnassigned={isAdmin}
+              placeholder={canTransferLeads && !isAdmin ? 'Transfer to…' : 'Unassigned'}
             />
             <button
               type="button"
@@ -206,16 +228,18 @@ export default function LeadTable({
               disabled={saving}
               onClick={handleBulkAssign}
             >
-              Assign selected
+              {canTransferLeads && !isAdmin ? 'Transfer selected' : 'Assign selected'}
             </button>
-            <button
-              type="button"
-              className="app-btn app-btn-danger app-btn-sm"
-              disabled={saving}
-              onClick={handleBulkDelete}
-            >
-              Delete selected
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className="app-btn app-btn-danger app-btn-sm"
+                disabled={saving}
+                onClick={handleBulkDelete}
+              >
+                Delete selected
+              </button>
+            )}
             <button
               type="button"
               className="app-btn app-btn-ghost app-btn-sm"
@@ -231,7 +255,7 @@ export default function LeadTable({
         <table className="app-table">
           <thead>
             <tr>
-              {isAdmin && (
+              {showSelection && (
                 <th className="col-checkbox">
                   <input
                     type="checkbox"
@@ -245,14 +269,15 @@ export default function LeadTable({
                 </th>
               )}
               <th>Full Name</th>
-              <th className="col-contact">Contact</th>
-              {showOptionalCols.platform && <th>Platform</th>}
-              {showOptionalCols.targetYear && <th>Target Year</th>}
-              {showOptionalCols.requirement && <th>Why Prepare</th>}
-              {showOptionalCols.dateOfBirth && <th>DOB</th>}
-              {showOptionalCols.gender && <th>Gender</th>}
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Gender</th>
+              <th>Date of Birth</th>
+              <th>Target Year</th>
+              <th className="col-requirement">Requirement</th>
+              {showPlatformCol && <th>Platform</th>}
               <th>Status</th>
-              {isAdmin && <th>Assigned To</th>}
+              {showAssignColumn && <th>{canTransferLeads && !isAdmin ? 'Transfer To' : 'Assigned To'}</th>}
               <th className="col-notes">Notes</th>
               <th>Follow-up</th>
               <th>Fee</th>
@@ -268,7 +293,7 @@ export default function LeadTable({
                 key={lead._id}
                 className={selectedIds.has(lead._id) ? 'row-selected' : undefined}
               >
-                {isAdmin && (
+                {showSelection && (
                   <td className="col-checkbox">
                     <input
                       type="checkbox"
@@ -283,45 +308,58 @@ export default function LeadTable({
                     {lead.name}
                   </button>
                 </td>
-                <td className="col-contact">
-                  <div className="contact-cell">
-                    {lead.mobile && !lead.mobile.includes('@') && (
-                      <span className="contact-phone">{lead.mobile}</span>
-                    )}
-                    {(lead.email || lead.mobile?.includes('@')) && (
-                      <span className="table-email" title={lead.email || lead.mobile}>
-                        {lead.email || lead.mobile}
-                      </span>
-                    )}
-                    {!lead.mobile && !lead.email && <span className="muted-text">—</span>}
-                  </div>
+                <td>
+                  {lead.mobile && !lead.mobile.includes('@') ? (
+                    <span className="contact-phone">{lead.mobile}</span>
+                  ) : (
+                    <span className="muted-text">—</span>
+                  )}
                 </td>
-                {showOptionalCols.platform && <td>{lead.platform || '—'}</td>}
-                {showOptionalCols.targetYear && <td>{lead.targetYear || '—'}</td>}
-                {showOptionalCols.requirement && (
-                  <td className="col-truncate" title={lead.requirement || ''}>
-                    {lead.requirement
-                      ? lead.requirement.length > 40
-                        ? `${lead.requirement.slice(0, 40)}…`
-                        : lead.requirement
-                      : '—'}
-                  </td>
-                )}
-                {showOptionalCols.dateOfBirth && <td>{lead.dateOfBirth || '—'}</td>}
-                {showOptionalCols.gender && <td>{lead.gender || '—'}</td>}
+                <td>
+                  {(lead.email || lead.mobile?.includes('@')) ? (
+                    <span className="table-email" title={lead.email || lead.mobile}>
+                      {lead.email || lead.mobile}
+                    </span>
+                  ) : (
+                    <span className="muted-text">—</span>
+                  )}
+                </td>
+                <td>{lead.gender || '—'}</td>
+                <td>{lead.dateOfBirth || '—'}</td>
+                <td>{lead.targetYear || '—'}</td>
+                <td className="col-requirement col-truncate" title={lead.requirement || ''}>
+                  {lead.requirement
+                    ? lead.requirement.length > 50
+                      ? `${lead.requirement.slice(0, 50)}…`
+                      : lead.requirement
+                    : '—'}
+                </td>
+                {showPlatformCol && <td>{lead.platform || '—'}</td>}
                 <td>
                   <StatusDropdown
                     value={row.status}
                     onChange={(status) => handleInlineUpdate(lead._id, { status }, lead)}
                   />
                 </td>
-                {isAdmin && (
+                {showAssignColumn && (
                   <td>
-                    <AssignDropdown
-                      users={salesUsers}
-                      value={lead.assignedTo?._id || lead.assignedTo}
-                      onChange={(assignedTo) => handleAssign(lead._id, assignedTo)}
-                    />
+                    {canTransferLeads && !isAdmin ? (
+                      <AssignDropdown
+                        users={assignUsers}
+                        value=""
+                        onChange={(assignedTo) => handleAssign(lead._id, assignedTo)}
+                        allowUnassigned={false}
+                        placeholder="Transfer to…"
+                      />
+                    ) : (
+                      <AssignDropdown
+                        users={assignUsers}
+                        value={lead.assignedTo?._id || lead.assignedTo}
+                        onChange={(assignedTo) => handleAssign(lead._id, assignedTo)}
+                        allowUnassigned={isAdmin}
+                        placeholder="Unassigned"
+                      />
+                    )}
                   </td>
                 )}
                 <td className="col-notes">

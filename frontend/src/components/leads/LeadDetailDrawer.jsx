@@ -76,7 +76,7 @@ export default function LeadDetailDrawer({ leadId, onClose, onRefresh }) {
             </div>
             {lead.requirement && (
               <div className="detail-section">
-                <label>Why do you want to prepare?</label>
+                <label>Requirement</label>
                 <p>{lead.requirement}</p>
               </div>
             )}

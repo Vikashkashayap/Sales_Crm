@@ -11,16 +11,28 @@ import {
 } from '../../utils/studentConstants';
 import {
   buildInstallmentPreview,
+  getInstallmentBalanceTotal,
   getInstallmentPlanLabel,
-  sumInstallmentPaid,
+  setInstallmentAmountAt,
 } from '../../utils/paymentHelpers';
 
 const STEPS = ['Student Info', 'Program & Fee', 'Confirm & Register'];
 
 const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
 
-function InstallmentSchedule({ installments, plan, balanceDue, amountPaidNum }) {
-  if (!installments.length) return null;
+function InstallmentSchedule({
+  installments,
+  plan,
+  balanceDue,
+  amountPaidNum,
+  editable,
+  onInstallmentAmountChange,
+}) {
+  const dueInstallments = installments.filter((inst) => Number(inst.amount) >= 0);
+  const showRegistration = amountPaidNum > 0;
+  const lastNumber = dueInstallments.length ? dueInstallments[dueInstallments.length - 1].number : null;
+
+  if (!showRegistration && !dueInstallments.length) return null;
 
   return (
     <div className="installment-preview-box full-width">
@@ -28,17 +40,50 @@ function InstallmentSchedule({ installments, plan, balanceDue, amountPaidNum }) 
         <strong>Payment schedule</strong>
         <span className="muted-text">{getInstallmentPlanLabel(plan)}</span>
       </div>
+      {editable && dueInstallments.length > 1 && (
+        <p className="installment-preview-edit-hint muted-text">
+          Edit an installment amount; the last one adjusts to the remaining balance.
+        </p>
+      )}
       <ul className="installment-preview-list">
-        {installments.map((inst) => {
+        {showRegistration && (
+          <li className="installment-preview-row status-paid">
+            <span className="installment-preview-num">Reg.</span>
+            <span className="installment-preview-due">At registration</span>
+            <span className="installment-preview-amount">{fmtInr(amountPaidNum)}</span>
+            <span className="installment-preview-status badge badge-payment-paid">Paid</span>
+          </li>
+        )}
+        {dueInstallments.map((inst) => {
           const dueStr = inst.dueDate
             ? new Date(inst.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
             : '—';
           const remaining = Math.max(0, inst.amount - (inst.paidAmount || 0));
+          const isLast = inst.number === lastNumber;
+          const canEdit = editable && dueInstallments.length > 0 && (dueInstallments.length === 1 || !isLast);
+
           return (
             <li key={inst.number} className={`installment-preview-row status-${(inst.status || 'pending').toLowerCase()}`}>
               <span className="installment-preview-num">#{inst.number}</span>
               <span className="installment-preview-due">Due {dueStr}</span>
-              <span className="installment-preview-amount">{fmtInr(inst.amount)}</span>
+              {canEdit ? (
+                <input
+                  type="number"
+                  className="app-input installment-preview-amount-input"
+                  min={0}
+                  max={balanceDue}
+                  value={inst.amount}
+                  onChange={(e) => onInstallmentAmountChange?.(inst.number, e.target.value)}
+                  aria-label={`Installment ${inst.number} amount`}
+                />
+              ) : (
+                <span className="installment-preview-amount">
+                  {fmtInr(inst.amount)}
+                  {editable && isLast && dueInstallments.length > 1 && (
+                    <span className="installment-preview-auto-tag">auto</span>
+                  )}
+                </span>
+              )}
               <span className={`installment-preview-status badge badge-payment-${(inst.status || 'pending').toLowerCase()}`}>
                 {inst.status === 'Partial'
                   ? `${fmtInr(inst.paidAmount)} paid · ${fmtInr(remaining)} left`
@@ -49,7 +94,7 @@ function InstallmentSchedule({ installments, plan, balanceDue, amountPaidNum }) 
         })}
       </ul>
       <div className="installment-preview-summary">
-        <span>Registration amount (included in fee): <strong>{fmtInr(amountPaidNum)}</strong></span>
+        <span>Registration paid: <strong>{fmtInr(amountPaidNum)}</strong></span>
         <span>Balance due: <strong>{fmtInr(balanceDue)}</strong></span>
       </div>
     </div>
@@ -142,6 +187,8 @@ export default function RegisterStudentModal({
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [editedSchedule, setEditedSchedule] = useState(null);
+  const scheduleSourceKeyRef = useRef('');
 
   const bdas = salesUsers ?? EMPTY_SALES_USERS;
   const leadId = lead?._id ?? null;
@@ -161,7 +208,18 @@ export default function RegisterStudentModal({
     setStep(0);
     setForm(lead ? leadToForm(lead, bdas) : { ...emptyForm });
     setAlreadyRegistered(Boolean(isAlreadyRegisteredProp));
+    setEditedSchedule(null);
+    scheduleSourceKeyRef.current = '';
   }, [open, leadId, isAlreadyRegisteredProp, lead, bdas]);
+
+  useEffect(() => {
+    if (!open) return;
+    const key = `${form.totalFee}|${form.discount}|${form.installmentPlan}|${form.amountPaid}|${form.installmentStartDate}`;
+    if (scheduleSourceKeyRef.current && scheduleSourceKeyRef.current !== key) {
+      setEditedSchedule(null);
+    }
+    scheduleSourceKeyRef.current = key;
+  }, [open, form.totalFee, form.discount, form.installmentPlan, form.amountPaid, form.installmentStartDate]);
 
   // Re-fill BDA dropdown when sales users load after open (without wiping other fields)
   useEffect(() => {
@@ -216,8 +274,18 @@ export default function RegisterStudentModal({
     amountPaidNum,
     startDate
   );
+  const installmentBalanceTotal = getInstallmentBalanceTotal(finalFee, amountPaidNum);
+  const displayInstallments = editedSchedule ?? installmentPreview;
   const balanceDue = Math.max(0, finalFee - amountPaidNum);
-  const allocatedPaid = sumInstallmentPaid(installmentPreview);
+  const scheduleEditable = installmentBalanceTotal > 0 && displayInstallments.length > 0;
+  const needsBalanceDueDate = installmentBalanceTotal > 0;
+
+  const handleInstallmentAmountChange = (installmentNumber, rawValue) => {
+    const base = editedSchedule ?? installmentPreview;
+    setEditedSchedule(
+      setInstallmentAmountAt(base, installmentBalanceTotal, installmentNumber, rawValue)
+    );
+  };
 
   const validateStudentInfo = () => {
     if (!form.fullName.trim() || !form.phone.trim()) {
@@ -236,19 +304,22 @@ export default function RegisterStudentModal({
       toast.error('Amount paid cannot exceed final fee');
       return false;
     }
-    if (form.installmentPlan === 'Full Payment' && finalFee > 0 && amountPaidNum > 0 && amountPaidNum < finalFee) {
-      toast.error('For Full Payment, amount paid must equal the final fee (or leave it 0 for pay later)');
-      return false;
-    }
-    if (form.installmentPlan !== 'Full Payment' && form.installmentStartDate) {
-      if (Number.isNaN(startDate.getTime())) {
-        toast.error('Please select a valid first due date');
+    if (needsBalanceDueDate) {
+      if (!form.installmentStartDate || Number.isNaN(startDate.getTime())) {
+        toast.error(
+          form.installmentPlan === 'Full Payment'
+            ? 'Please select when the balance payment is due'
+            : 'Please select a valid first due date'
+        );
         return false;
       }
     }
-    if (amountPaidNum > 0 && allocatedPaid !== amountPaidNum) {
-      toast.error('Amount paid could not be allocated to installments — check fee and plan');
-      return false;
+    if (installmentBalanceTotal > 0 && displayInstallments.length > 0) {
+      const scheduleSum = displayInstallments.reduce((sum, inst) => sum + (Number(inst.amount) || 0), 0);
+      if (Math.abs(scheduleSum - installmentBalanceTotal) > 1) {
+        toast.error('Installment amounts must add up to the balance due');
+        return false;
+      }
     }
     return true;
   };
@@ -297,9 +368,9 @@ export default function RegisterStudentModal({
         totalFee: form.totalFee === '' ? 0 : Number(form.totalFee),
         discount: form.discount === '' ? 0 : Number(form.discount),
         installmentPlan: form.installmentPlan,
-        installmentStartDate: form.installmentPlan === 'Full Payment'
-          ? null
-          : (form.installmentStartDate ? `${form.installmentStartDate}T00:00:00` : null),
+        installmentStartDate: needsBalanceDueDate && form.installmentStartDate
+          ? `${form.installmentStartDate}T00:00:00`
+          : null,
         amountPaid: form.amountPaid === '' ? 0 : Number(form.amountPaid),
         paymentMode: form.paymentMode || 'Cash',
         transactionId: form.transactionId?.trim() || '',
@@ -307,6 +378,13 @@ export default function RegisterStudentModal({
       };
       if (form.leadId) payload.leadId = form.leadId;
       if (form.assignedBda) payload.assignedBda = form.assignedBda;
+      if (displayInstallments.length > 0) {
+        payload.installments = displayInstallments.map((inst) => ({
+          number: inst.number,
+          amount: inst.amount,
+          dueDate: inst.dueDate,
+        }));
+      }
 
       const res = await api.post('/students', payload);
       if (res.data?.welcomeEmailSent && !res.data?.welcomeEmailWarning) {
@@ -455,8 +533,9 @@ export default function RegisterStudentModal({
                 </select>
                 <span className="field-hint">{getInstallmentPlanLabel(form.installmentPlan)}</span>
               </label>
-              {form.installmentPlan !== 'Full Payment' && (
-                <label>First due date
+              {(form.installmentPlan !== 'Full Payment' || needsBalanceDueDate) && (
+                <label>
+                  {form.installmentPlan === 'Full Payment' ? 'Balance payment due date' : 'First due date'}
                   <input
                     className="app-input"
                     type="date"
@@ -464,7 +543,9 @@ export default function RegisterStudentModal({
                     onChange={(e) => set('installmentStartDate', e.target.value)}
                   />
                   <span className="field-hint">
-                    This will be the due date for installment/EMI #1. Next payments are monthly from this date.
+                    {form.installmentPlan === 'Full Payment'
+                      ? 'When the remaining fee must be paid in full (shown as due date for payment #1).'
+                      : 'This will be the due date for installment/EMI #1. Next payments are monthly from this date.'}
                   </span>
                 </label>
               )}
@@ -476,11 +557,11 @@ export default function RegisterStudentModal({
                   max={finalFee || undefined}
                   value={form.amountPaid}
                   onChange={(e) => set('amountPaid', e.target.value)}
-                  placeholder={form.installmentPlan === 'Full Payment' && finalFee > 0 ? String(finalFee) : '0'}
+                  placeholder="0"
                 />
-                {form.installmentPlan !== 'Full Payment' && finalFee > 0 && (
+                {finalFee > 0 && (
                   <span className="field-hint">
-                    Included in the total fee. Applied to earliest installment(s). Remaining balance split across the plan.
+                    Amount received now at registration (shown as Paid in the schedule). Remaining balance is due later.
                   </span>
                 )}
               </label>
@@ -512,10 +593,12 @@ export default function RegisterStudentModal({
               )}
               {finalFee > 0 && (
                 <InstallmentSchedule
-                  installments={installmentPreview}
+                  installments={displayInstallments}
                   plan={form.installmentPlan}
                   balanceDue={balanceDue}
                   amountPaidNum={amountPaidNum}
+                  editable={scheduleEditable}
+                  onInstallmentAmountChange={handleInstallmentAmountChange}
                 />
               )}
               <label className="full-width">Notes
@@ -542,6 +625,18 @@ export default function RegisterStudentModal({
                   </>
                 )}
                 <dt>Balance due</dt><dd>{fmtInr(balanceDue)}</dd>
+                {needsBalanceDueDate && form.installmentStartDate && (
+                  <>
+                    <dt>{form.installmentPlan === 'Full Payment' ? 'Balance payment due' : 'First due date'}</dt>
+                    <dd>
+                      {new Date(`${form.installmentStartDate}T00:00:00`).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </dd>
+                  </>
+                )}
                 {lead && (
                   <>
                     <dt>Lead source</dt><dd>{form.leadSource || '—'}</dd>
@@ -550,10 +645,12 @@ export default function RegisterStudentModal({
               </dl>
               {finalFee > 0 && (
                 <InstallmentSchedule
-                  installments={installmentPreview}
+                  installments={displayInstallments}
                   plan={form.installmentPlan}
                   balanceDue={balanceDue}
                   amountPaidNum={amountPaidNum}
+                  editable={scheduleEditable}
+                  onInstallmentAmountChange={handleInstallmentAmountChange}
                 />
               )}
             </div>

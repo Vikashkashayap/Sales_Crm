@@ -1,4 +1,5 @@
 import Lead from '../models/Lead.js';
+import User from '../models/User.js';
 import FollowUp from '../models/FollowUp.js';
 import * as XLSX from 'xlsx';
 import {
@@ -13,6 +14,35 @@ import { buildRoleFilter } from '../utils/leadHelpers.js';
 import { LEAD_STATUSES } from '../utils/constants.js';
 
 const populateOpts = { path: 'assignedTo', select: 'name email' };
+
+async function assertCanAssignLeads(req, leads) {
+  if (req.user.role === 'admin') return;
+  for (const lead of leads) {
+    if (lead.assignedTo?.toString() !== req.user._id.toString()) {
+      const err = new Error('You can only transfer leads assigned to you');
+      err.status = 403;
+      throw err;
+    }
+  }
+}
+
+async function validateAssignee(assignedTo, req) {
+  if (!assignedTo) {
+    if (req.user.role === 'sales') {
+      const err = new Error('Select a BDA to transfer the lead to');
+      err.status = 400;
+      throw err;
+    }
+    return null;
+  }
+  const user = await User.findOne({ _id: assignedTo, role: 'sales', isActive: { $ne: false } });
+  if (!user) {
+    const err = new Error('Invalid BDA selected');
+    err.status = 400;
+    throw err;
+  }
+  return user;
+}
 
 const syncFollowUpForLead = async ({ lead, followupDate, assigneeUserId, actorUserId }) => {
   // If followup is cleared, cancel pending followups for this lead.
@@ -358,6 +388,9 @@ export const assignLead = async (req, res) => {
     const lead = await Lead.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!lead) return res.status(404).json({ message: 'Lead not found' });
 
+    await assertCanAssignLeads(req, [lead]);
+    await validateAssignee(assignedTo, req);
+
     const prev = lead.assignedTo?.toString();
     lead.assignedTo = assignedTo || null;
     await lead.save();
@@ -385,7 +418,7 @@ export const assignLead = async (req, res) => {
 
     res.json(updated);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Server error' });
+    res.status(error.status || 500).json({ message: error.message || 'Server error' });
   }
 };
 
@@ -400,6 +433,9 @@ export const bulkAssignLeads = async (req, res) => {
     if (!leads.length) {
       return res.status(404).json({ message: 'No valid leads found' });
     }
+
+    await assertCanAssignLeads(req, leads);
+    await validateAssignee(assignedTo, req);
 
     const leadIds = leads.map((l) => l._id);
     await Lead.updateMany({ _id: { $in: leadIds } }, { assignedTo: assignedTo || null });
@@ -430,7 +466,7 @@ export const bulkAssignLeads = async (req, res) => {
       count: leads.length,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Server error' });
+    res.status(error.status || 500).json({ message: error.message || 'Server error' });
   }
 };
 

@@ -10,6 +10,7 @@ import {
   inPeriod,
   derivePaymentStatus,
   buildInstallments,
+  getRegistrationPaidAmount,
   sumInstallmentPaid,
   syncInstallmentStatuses,
 } from '../utils/paymentHelpers.js';
@@ -253,7 +254,8 @@ export const markInstallmentPaid = async (req, res) => {
     installments[idx].paidAt = new Date();
 
     const synced = syncInstallmentStatuses(installments);
-    const totalPaid = sumInstallmentPaid(synced);
+    const registrationPaid = getRegistrationPaidAmount(student);
+    const totalPaid = registrationPaid + sumInstallmentPaid(synced);
 
     const hasOverdue = synced.some((i) => i.status === 'Overdue');
 

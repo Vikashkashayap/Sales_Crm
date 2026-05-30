@@ -70,46 +70,88 @@ export const sumInstallmentPaid = (installments) =>
 
 export const buildInstallments = (finalFee, plan, startDate = new Date(), amountPaid = 0) => {
   const count = getInstallmentCount(plan);
-  const paidNow = Math.max(0, Number(amountPaid) || 0);
+  const registrationPaid = Math.max(0, Number(amountPaid) || 0);
   const fee = Math.max(0, Number(finalFee) || 0);
+  const installmentTotal = Math.max(0, fee - Math.min(registrationPaid, fee));
 
   if (!fee) {
     return [{
       number: 1,
       amount: 0,
-      paidAmount: paidNow,
+      paidAmount: 0,
       dueDate: startDate,
-      paidAt: paidNow > 0 ? startDate : null,
-      status: paidNow > 0 ? 'Paid' : 'Pending',
+      paidAt: null,
+      status: 'Pending',
     }];
   }
 
-  const base = Math.floor(fee / count);
-  let remainingPaid = paidNow;
+  if (!installmentTotal) {
+    return [];
+  }
+
+  const base = Math.floor(installmentTotal / count);
   const installments = [];
 
   for (let i = 0; i < count; i++) {
-    const amount = i === count - 1 ? fee - base * (count - 1) : base;
+    const amount = i === count - 1 ? installmentTotal - base * (count - 1) : base;
     const dueDate = new Date(startDate);
     dueDate.setMonth(dueDate.getMonth() + i);
-
-    const applied = Math.min(remainingPaid, amount);
-    remainingPaid -= applied;
-
-    let paidAt = null;
-    if (applied >= amount) paidAt = new Date(startDate);
 
     installments.push({
       number: i + 1,
       amount,
-      paidAmount: applied,
+      paidAmount: 0,
       dueDate,
-      paidAt,
-      status: installmentStatusFromPaid(applied, amount),
+      paidAt: null,
+      status: 'Pending',
     });
   }
 
   return syncInstallmentStatuses(installments);
+};
+
+export const getInstallmentBalanceTotal = (finalFee, amountPaid = 0) => {
+  const fee = Math.max(0, Number(finalFee) || 0);
+  const registrationPaid = Math.max(0, Number(amountPaid) || 0);
+  return Math.max(0, fee - Math.min(registrationPaid, fee));
+};
+
+export const resolveInstallments = (finalFee, plan, startDate, amountPaid, customInstallments) => {
+  const built = buildInstallments(finalFee, plan, startDate, amountPaid);
+  if (!Array.isArray(customInstallments) || !customInstallments.length) return built;
+
+  const installmentTotal = getInstallmentBalanceTotal(finalFee, amountPaid);
+  if (!installmentTotal) return built;
+
+  const normalized = customInstallments.map((inst, i) => {
+    const dueDate = inst.dueDate && !Number.isNaN(new Date(inst.dueDate).getTime())
+      ? new Date(inst.dueDate)
+      : (built[i]?.dueDate || startDate);
+    return {
+      number: Number(inst.number) || i + 1,
+      amount: Math.max(0, Math.floor(Number(inst.amount) || 0)),
+      paidAmount: 0,
+      dueDate,
+      paidAt: null,
+      status: 'Pending',
+    };
+  });
+
+  const sum = normalized.reduce((s, inst) => s + inst.amount, 0);
+  if (Math.abs(sum - installmentTotal) > 1) {
+    const err = new Error(`Installment amounts must total ₹${installmentTotal.toLocaleString('en-IN')} (got ₹${sum.toLocaleString('en-IN')})`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return syncInstallmentStatuses(normalized);
+};
+
+/** Upfront registration/collected amount kept separate from installment rows */
+export const getRegistrationPaidAmount = (student) => {
+  const totalPaid = Math.max(0, Number(student?.amountPaid) || 0);
+  const fromInstallments = sumInstallmentPaid(student?.installments);
+  return Math.max(0, totalPaid - fromInstallments);
 };
 
 export const generateStudentCode = async () => {

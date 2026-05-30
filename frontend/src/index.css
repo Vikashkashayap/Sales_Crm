@@ -1117,6 +1117,10 @@ a:hover {
   min-width: 140px;
   max-width: 200px;
 }
+.app-table .col-requirement {
+  min-width: 120px;
+  max-width: 220px;
+}
 .contact-cell {
   display: flex;
   flex-direction: column;
@@ -1574,6 +1578,27 @@ a:hover {
 .installment-preview-num { font-weight: 600; color: var(--muted); }
 .installment-preview-due { color: var(--text); }
 .installment-preview-amount { font-weight: 600; text-align: right; }
+.installment-preview-amount-input {
+  width: 100%;
+  max-width: 110px;
+  justify-self: end;
+  padding: 6px 8px;
+  font-size: 13px;
+  text-align: right;
+}
+.installment-preview-edit-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.installment-preview-auto-tag {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .installment-preview-status { justify-self: end; font-size: 11px; }
 .installment-preview-summary {
   display: flex;

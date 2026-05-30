@@ -53,14 +53,19 @@ export default function UploadPasteLeads({ onSuccess }) {
         Paste from Excel
       </h3>
       <p className="muted-text" style={{ marginBottom: 12 }}>
-        Copy rows from Excel (<strong>Ctrl+C</strong>) and paste below (<strong>Ctrl+V</strong>).
-        Include the header row (Name, Phone, Email, etc.). Each row needs{' '}
-        <strong>Name</strong> + <strong>Phone or Email</strong>. Duplicates are skipped like file upload.
+        Copy rows from Google Sheets / Excel (<strong>Ctrl+C</strong>) and paste below (<strong>Ctrl+V</strong>).
+        Header row optional — 9-column UPSC form layout is auto-detected. Each row needs{' '}
+        <strong>full_name</strong> + <strong>phone_number or email</strong>.
       </p>
       <form onSubmit={handleSubmit}>
         <textarea
           className="app-input upload-paste-area"
-          placeholder={'Paste Excel rows here…\nExample:\nName\tPhone\tEmail\nRahul Kumar\t9876543210\trahul@example.com'}
+          placeholder={
+            'Paste Excel rows here…\nExample:\n' +
+            'are_you_preparing_for_upsc?\tattempt_year?\thow_many_hours_do_you_study_for_upsc_on_daily_basis?\t' +
+            'why_do_you_want_to_appear_for_upsc?\tfull_name\temail\tphone_number\tgender\tdate_of_birth\n' +
+            'Yes\t2026\t5\tIAS dream\tRahul Kumar\trahul@example.com\t9876543210\tMale\t01/01/2000'
+          }
           value={text}
           onChange={(e) => {
             setText(e.target.value);

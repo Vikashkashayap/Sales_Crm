@@ -136,7 +136,7 @@ function drawInfoColumns(
     .font('Helvetica')
     .fontSize(9)
     .fillColor('#64748b')
-    .text('(A Unit of Sempriority Technologies)', left, y + 14, { width: colW });
+    .text('(A Unit of Sempiternity Technologies)', left, y + 14, { width: colW });
 
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text('Bill To:', left, y + 38, { width: colW });
   doc
