@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import api from '../api/axios';
 
-export default function UploadExcel({ onSuccess }) {
+export default function UploadExcel({ onSuccess, assignedTo = '' }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -21,6 +21,7 @@ export default function UploadExcel({ onSuccess }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (assignedTo) formData.append('assignedTo', assignedTo);
       const { data } = await api.post('/leads/upload-excel', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

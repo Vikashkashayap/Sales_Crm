@@ -212,8 +212,8 @@ export default function LeadTable({
   return (
     <div>
       {showSelection && someSelected && (
-        <div className="bulk-actions-bar">
-          <span className="bulk-actions-count">{selectedIds.size} selected</span>
+        <div className="bulk-actions-bar bulk-actions-bar-sticky" role="region" aria-label="Bulk lead actions">
+          <span className="bulk-actions-count">{selectedIds.size} lead(s) selected</span>
           <div className="bulk-actions-controls">
             <AssignDropdown
               users={assignUsers}

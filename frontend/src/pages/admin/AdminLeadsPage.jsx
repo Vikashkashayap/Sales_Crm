@@ -111,6 +111,11 @@ export default function AdminLeadsPage() {
 
       <div className="app-card" style={{ marginBottom: 16 }}>
         <LeadFilters filters={filters} onChange={(f) => { setFilters(f); setPage(1); }} salesUsers={salesUsers} isAdmin />
+        {view === 'table' && (
+          <p className="bulk-assign-hint muted-text">
+            Bulk assign: left-side checkboxes se leads select karein, phir &quot;Assign selected&quot; se ek saath BDA ko assign karein.
+          </p>
+        )}
       </div>
 
       <div className="app-card">

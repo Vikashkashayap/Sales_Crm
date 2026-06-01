@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import UploadExcel from '../../components/UploadExcel';
 import UploadPasteLeads from '../../components/UploadPasteLeads';
+import AssignToField from '../../components/AssignToField';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 
 export default function AdminUploadPage() {
   const toast = useToast();
+  const [salesUsers, setSalesUsers] = useState([]);
+  const [assignedTo, setAssignedTo] = useState('');
   const [form, setForm] = useState({ name: '', mobile: '', email: '', source: 'Manual' });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/users/sales').then((res) => setSalesUsers(res.data)).catch(() => {});
+  }, []);
 
   const onChange = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
 
@@ -27,6 +34,7 @@ export default function AdminUploadPage() {
         mobile,
         email,
         source: form.source || 'Manual',
+        ...(assignedTo ? { assignedTo } : {}),
       });
       toast.success('Lead added successfully');
       setForm({ name: '', mobile: '', email: '', source: 'Manual' });
@@ -41,12 +49,24 @@ export default function AdminUploadPage() {
     <div style={{ display: 'grid', gap: 16 }}>
       <div className="app-card">
         <h2 className="section-heading">Upload Leads</h2>
-        <UploadExcel />
-        <UploadPasteLeads />
+        <AssignToField
+          salesUsers={salesUsers}
+          value={assignedTo}
+          onChange={setAssignedTo}
+          label="Assign imported leads to (optional)"
+        />
+        <UploadExcel assignedTo={assignedTo} />
+        <UploadPasteLeads assignedTo={assignedTo} />
       </div>
 
       <div className="app-card">
         <h2 className="section-heading">Add Lead Manually</h2>
+        <AssignToField
+          salesUsers={salesUsers}
+          value={assignedTo}
+          onChange={setAssignedTo}
+          label="Assign to BDA (optional)"
+        />
         <form onSubmit={submitManual} className="form-row" style={{ gap: 10, flexWrap: 'wrap' }}>
           <input
             className="app-input"

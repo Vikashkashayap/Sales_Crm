@@ -194,6 +194,11 @@ export const createLead = async (req, res) => {
       });
     }
 
+    const assignedTo = req.body.assignedTo || null;
+    if (assignedTo) {
+      await validateAssignee(assignedTo, req);
+    }
+
     const payload = {
       name: name.trim(),
       mobile: String(mobile).trim(),
@@ -209,7 +214,7 @@ export const createLead = async (req, res) => {
       priority: req.body.priority || 'Medium',
       budget: req.body.budget ?? null,
       requirement: req.body.requirement || '',
-      assignedTo: req.body.assignedTo || null,
+      assignedTo,
       followupDate: req.body.followupDate || null,
       dealValue: req.body.dealValue ?? null,
       tags: req.body.tags || [],
@@ -539,6 +544,10 @@ export const getLeadHistory = async (req, res) => {
 const importParsedLeads = async (req, res, { parsed, sheetResults, activityLabel, defaultSource, emptyPayload }) => {
   const importedSheets = sheetResults.filter((s) => s.imported > 0).map((s) => s.sheet);
   const emptySheets = sheetResults.filter((s) => s.skipped).map((s) => s.sheet);
+  const assignedTo = req.body.assignedTo || null;
+  if (assignedTo) {
+    await validateAssignee(assignedTo, req);
+  }
 
   if (parsed.length === 0) {
     return res.status(400).json({
@@ -602,7 +611,7 @@ const importParsedLeads = async (req, res, { parsed, sheetResults, activityLabel
       source: row.source || defaultSource,
       company: row.company || '',
       status: 'New',
-      assignedTo: null,
+      assignedTo: assignedTo || null,
       createdBy: req.user._id,
     });
   }
@@ -628,8 +637,20 @@ const importParsedLeads = async (req, res, { parsed, sheetResults, activityLabel
       count: result.length,
       skippedDuplicates: skippedDuplicates.length,
       sheets: importedSheets,
+      assignedTo,
     },
   });
+
+  if (assignedTo) {
+    await createNotification({
+      userId: assignedTo,
+      type: 'lead_assigned',
+      title: 'New leads assigned',
+      message: `${result.length} lead(s) from ${activityLabel} import have been assigned to you`,
+      link: '/leads',
+      metadata: { count: result.length, bulk: true },
+    });
+  }
 
   const parts = [`${result.length} lead(s) imported`, `(${importedSheets.join(', ')})`];
   if (skippedDuplicates.length) parts.push(`${skippedDuplicates.length} duplicate(s) skipped`);

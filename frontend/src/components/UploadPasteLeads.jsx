@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../api/axios';
 
-export default function UploadPasteLeads({ onSuccess }) {
+export default function UploadPasteLeads({ onSuccess, assignedTo = '' }) {
   const [text, setText] = useState('');
   const [source, setSource] = useState('Paste Upload');
   const [loading, setLoading] = useState(false);
@@ -27,6 +27,7 @@ export default function UploadPasteLeads({ onSuccess }) {
       const { data } = await api.post('/leads/upload-paste', {
         text: text.trim(),
         source: source.trim() || 'Paste Upload',
+        ...(assignedTo ? { assignedTo } : {}),
       });
       const dup = data.skippedDuplicates ? ` (${data.skippedDuplicates} duplicates skipped)` : '';
       setMessage(`${data.message || 'Success'}${dup}`);
