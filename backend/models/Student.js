@@ -6,6 +6,8 @@ import {
   EXAM_MEDIUMS,
   ATTEMPT_OPTIONS,
   INSTALLMENT_PLANS,
+  APPROVAL_STATUSES,
+  PAYMENT_MODES,
 } from '../utils/studentConstants.js';
 
 const studentSchema = new mongoose.Schema(
@@ -45,8 +47,33 @@ const studentSchema = new mongoose.Schema(
       enum: INSTALLMENT_PLANS,
       default: 'Full Payment',
     },
+    customInstallmentCount: { type: Number, default: null, min: 2, max: 60 },
     installmentStartDate: { type: Date, default: null },
     amountPaid: { type: Number, default: 0 },
+    paymentMode: {
+      type: String,
+      enum: PAYMENT_MODES,
+      default: 'Cash',
+    },
+    transactionId: { type: String, trim: true, default: '' },
+    approvalStatus: {
+      type: String,
+      enum: APPROVAL_STATUSES,
+      default: 'approved',
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    approvedAt: { type: Date, default: null },
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    rejectedAt: { type: Date, default: null },
+    rejectionReason: { type: String, trim: true, default: '' },
     studentCode: { type: String, trim: true, unique: true, sparse: true },
     refundEligible: { type: Boolean, default: false },
     installments: [
@@ -86,6 +113,7 @@ const studentSchema = new mongoose.Schema(
 studentSchema.index({ fullName: 'text', phone: 'text', email: 'text' });
 studentSchema.index({ status: 1 });
 studentSchema.index({ paymentStatus: 1 });
+studentSchema.index({ approvalStatus: 1 });
 
 const Student = mongoose.model('Student', studentSchema);
 export default Student;

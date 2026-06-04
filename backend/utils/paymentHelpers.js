@@ -1,13 +1,22 @@
 import Student from '../models/Student.js';
 
+import { ACTIVE_STUDENT_APPROVAL_FILTER, CUSTOM_EMI_MIN, CUSTOM_EMI_MAX } from './studentConstants.js';
+
 export const buildPaymentFilter = (user) => {
-  if (user.role === 'admin') return {};
-  return {
-    $or: [{ registeredBy: user._id }, { assignedBda: user._id }],
-  };
+  const roleFilter =
+    user.role === 'admin'
+      ? {}
+      : { $or: [{ registeredBy: user._id }, { assignedBda: user._id }] };
+  return { ...roleFilter, ...ACTIVE_STUDENT_APPROVAL_FILTER };
 };
 
-export const getInstallmentCount = (plan) => {
+export const normalizeCustomInstallmentCount = (raw) => {
+  const n = Math.floor(Number(raw) || 0);
+  if (!n) return CUSTOM_EMI_MIN;
+  return Math.min(CUSTOM_EMI_MAX, Math.max(CUSTOM_EMI_MIN, n));
+};
+
+export const getInstallmentCount = (plan, customInstallmentCount) => {
   switch (plan) {
     case '2 Installments':
       return 2;
@@ -15,12 +24,14 @@ export const getInstallmentCount = (plan) => {
       return 3;
     case 'EMI':
       return 6;
+    case 'Custom EMI':
+      return normalizeCustomInstallmentCount(customInstallmentCount);
     default:
       return 1;
   }
 };
 
-export const getInstallmentPlanLabel = (plan) => {
+export const getInstallmentPlanLabel = (plan, customInstallmentCount) => {
   switch (plan) {
     case '2 Installments':
       return '2 Installments (2 equal payments)';
@@ -28,6 +39,10 @@ export const getInstallmentPlanLabel = (plan) => {
       return '3 Installments (3 equal payments)';
     case 'EMI':
       return 'EMI (6 monthly payments)';
+    case 'Custom EMI': {
+      const n = getInstallmentCount(plan, customInstallmentCount);
+      return `Custom EMI (${n} monthly payments)`;
+    }
     default:
       return 'Full Payment (single payment)';
   }
@@ -68,8 +83,14 @@ export const syncInstallmentStatuses = (installments) => {
 export const sumInstallmentPaid = (installments) =>
   (installments || []).reduce((sum, inst) => sum + (Number(inst.paidAmount) || 0), 0);
 
-export const buildInstallments = (finalFee, plan, startDate = new Date(), amountPaid = 0) => {
-  const count = getInstallmentCount(plan);
+export const buildInstallments = (
+  finalFee,
+  plan,
+  startDate = new Date(),
+  amountPaid = 0,
+  customInstallmentCount
+) => {
+  const count = getInstallmentCount(plan, customInstallmentCount);
   const registrationPaid = Math.max(0, Number(amountPaid) || 0);
   const fee = Math.max(0, Number(finalFee) || 0);
   const installmentTotal = Math.max(0, fee - Math.min(registrationPaid, fee));
@@ -116,8 +137,15 @@ export const getInstallmentBalanceTotal = (finalFee, amountPaid = 0) => {
   return Math.max(0, fee - Math.min(registrationPaid, fee));
 };
 
-export const resolveInstallments = (finalFee, plan, startDate, amountPaid, customInstallments) => {
-  const built = buildInstallments(finalFee, plan, startDate, amountPaid);
+export const resolveInstallments = (
+  finalFee,
+  plan,
+  startDate,
+  amountPaid,
+  customInstallments,
+  customInstallmentCount
+) => {
+  const built = buildInstallments(finalFee, plan, startDate, amountPaid, customInstallmentCount);
   if (!Array.isArray(customInstallments) || !customInstallments.length) return built;
 
   const installmentTotal = getInstallmentBalanceTotal(finalFee, amountPaid);
@@ -189,7 +217,8 @@ export const ensureStudentInstallments = (student) => {
       doc.finalFee,
       doc.installmentPlan,
       doc.createdAt || new Date(),
-      doc.amountPaid || 0
+      doc.amountPaid || 0,
+      doc.customInstallmentCount
     );
   } else {
     doc.installments = syncInstallmentStatuses(

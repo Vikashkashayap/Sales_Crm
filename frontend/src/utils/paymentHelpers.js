@@ -1,4 +1,12 @@
-export const getInstallmentCount = (plan) => {
+import { CUSTOM_EMI_MIN, CUSTOM_EMI_MAX } from './studentConstants';
+
+export const normalizeCustomInstallmentCount = (raw) => {
+  const n = Math.floor(Number(raw) || 0);
+  if (!n) return CUSTOM_EMI_MIN;
+  return Math.min(CUSTOM_EMI_MAX, Math.max(CUSTOM_EMI_MIN, n));
+};
+
+export const getInstallmentCount = (plan, customInstallmentCount) => {
   switch (plan) {
     case '2 Installments':
       return 2;
@@ -6,12 +14,14 @@ export const getInstallmentCount = (plan) => {
       return 3;
     case 'EMI':
       return 6;
+    case 'Custom EMI':
+      return normalizeCustomInstallmentCount(customInstallmentCount);
     default:
       return 1;
   }
 };
 
-export const getInstallmentPlanLabel = (plan) => {
+export const getInstallmentPlanLabel = (plan, customInstallmentCount) => {
   switch (plan) {
     case '2 Installments':
       return '2 equal payments';
@@ -19,13 +29,29 @@ export const getInstallmentPlanLabel = (plan) => {
       return '3 equal payments';
     case 'EMI':
       return '6 monthly EMIs';
+    case 'Custom EMI': {
+      const n = getInstallmentCount(plan, customInstallmentCount);
+      return `${n} monthly EMIs (custom)`;
+    }
     default:
       return 'Single full payment';
   }
 };
 
-export const buildInstallmentPreview = (finalFee, plan, amountPaid = 0, startDate = new Date()) => {
-  const count = getInstallmentCount(plan);
+export const formatInstallmentPlanOption = (plan) => {
+  if (plan === 'EMI') return 'EMI (6 monthly payments)';
+  if (plan === 'Custom EMI') return 'Custom EMI (choose number of payments)';
+  return plan;
+};
+
+export const buildInstallmentPreview = (
+  finalFee,
+  plan,
+  amountPaid = 0,
+  startDate = new Date(),
+  customInstallmentCount
+) => {
+  const count = getInstallmentCount(plan, customInstallmentCount);
   const registrationPaid = Math.max(0, Number(amountPaid) || 0);
   const fee = Math.max(0, Number(finalFee) || 0);
   const installmentTotal = Math.max(0, fee - Math.min(registrationPaid, fee));

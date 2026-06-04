@@ -1,9 +1,15 @@
+import fs from 'fs/promises';
+import path from 'path';
 import mongoose from 'mongoose';
 import Student from '../models/Student.js';
 import Lead from '../models/Lead.js';
+import Payment from '../models/Payment.js';
+import EmailLog from '../models/EmailLog.js';
+import ReminderLog from '../models/ReminderLog.js';
+import Activity from '../models/Activity.js';
 import { CONVERTED_STATUSES } from '../utils/studentConstants.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { buildStudentFilter } from '../utils/studentPaymentFilter.js';
+import { buildStudentFilter, buildPendingApprovalFilter } from '../utils/studentPaymentFilter.js';
 import {
   buildInstallments,
   resolveInstallments,
@@ -12,7 +18,7 @@ import {
   generateStudentCode,
   ensureStudentInstallments,
 } from '../utils/paymentHelpers.js';
-import { sendWelcomeEmail } from '../services/emailService.js';
+import { sendWelcomeEmail, sendBdaSaleConfirmationEmail } from '../services/emailService.js';
 
 const toObjectId = (id, fallback) => {
   if (!id || id === 'null' || id === 'undefined') return fallback;
@@ -24,8 +30,68 @@ const toObjectId = (id, fallback) => {
 const populateOpts = [
   { path: 'assignedBda', select: 'name email' },
   { path: 'registeredBy', select: 'name email' },
+  { path: 'approvedBy', select: 'name email' },
+  { path: 'rejectedBy', select: 'name email' },
   { path: 'leadId', select: 'name mobile email source status assignedTo' },
 ];
+
+const appendBdaConfirmationNote = (message, bdaResult) => {
+  if (!bdaResult?.sent || !bdaResult?.to) return message;
+  return `${message} Confirmation email sent to BDA (${bdaResult.to}).`;
+};
+
+const sendWelcomeForStudent = async (student, { paymentMode, transactionId } = {}) => {
+  if (!student.email) {
+    return {
+      welcomeEmailSent: false,
+      welcomeEmailMessage: 'Student approved. Add an email address to send the welcome kit.',
+      welcomeEmailWarning: false,
+      bdaEmailSent: false,
+    };
+  }
+  try {
+    const result = await sendWelcomeEmail(student, {
+      paymentMode: paymentMode?.trim() || student.paymentMode || 'Cash',
+      transactionId: transactionId?.trim() || student.transactionId || '',
+    });
+    const bdaResult = await sendBdaSaleConfirmationEmail(student, {
+      studentEmail: student.email,
+      receiptAttached: Boolean(result.receiptAttached),
+    });
+    const receiptNote = result.receiptAttached
+      ? ' Fee invoice attached.'
+      : Number(student.finalFee) > 0
+        ? ''
+        : ' No fee invoice (fee not set).';
+    if (result.missingAttachments?.length) {
+      return {
+        welcomeEmailSent: true,
+        welcomeEmailMessage: appendBdaConfirmationNote(
+          `Welcome email sent.${receiptNote} Some PDF attachments were missing on the server.`,
+          bdaResult
+        ),
+        welcomeEmailWarning: true,
+        bdaEmailSent: Boolean(bdaResult.sent),
+      };
+    }
+    return {
+      welcomeEmailSent: true,
+      welcomeEmailMessage: appendBdaConfirmationNote(
+        `Welcome email sent to student.${receiptNote}`,
+        bdaResult
+      ),
+      welcomeEmailWarning: false,
+      bdaEmailSent: Boolean(bdaResult.sent),
+    };
+  } catch (e) {
+    return {
+      welcomeEmailSent: false,
+      welcomeEmailMessage: e.message || 'Approved, but welcome email could not be sent.',
+      welcomeEmailWarning: true,
+      bdaEmailSent: false,
+    };
+  }
+};
 
 export const getRegisteredLeadIds = async (req, res) => {
   try {
@@ -67,7 +133,115 @@ export const getStudentByLeadId = async (req, res) => {
       }
     }
 
-    res.json({ registered: true, student });
+    res.json({
+      registered: true,
+      student,
+      pendingApproval: student.approvalStatus === 'pending',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const getPendingApprovals = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    const students = await Student.find(buildPendingApprovalFilter(req.user))
+      .populate(populateOpts)
+      .sort({ createdAt: -1 });
+    res.json(students.map((s) => ensureStudentInstallments(s)));
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const getMyPendingSubmissions = async (req, res) => {
+  try {
+    const students = await Student.find(buildPendingApprovalFilter(req.user))
+      .populate(populateOpts)
+      .sort({ createdAt: -1 });
+    res.json(students.map((s) => ensureStudentInstallments(s)));
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const approveStudent = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+    if (student.approvalStatus === 'approved') {
+      return res.status(400).json({ message: 'Registration is already approved' });
+    }
+    if (student.approvalStatus === 'rejected') {
+      return res.status(400).json({ message: 'This registration was rejected and cannot be approved' });
+    }
+
+    student.approvalStatus = 'approved';
+    student.approvedBy = req.user._id;
+    student.approvedAt = new Date();
+    student.rejectedBy = null;
+    student.rejectedAt = null;
+    student.rejectionReason = '';
+    await student.save();
+
+    const populated = await Student.findById(student._id).populate(populateOpts);
+    const emailResult = await sendWelcomeForStudent(populated);
+
+    await logActivity({
+      type: 'lead_updated',
+      description: `Student "${student.fullName}" registration approved by admin`,
+      userId: req.user._id,
+      leadId: student.leadId || undefined,
+      metadata: { studentId: student._id },
+    });
+
+    res.json({
+      ...(populated.toObject ? populated.toObject() : populated),
+      message: 'Registration approved',
+      ...emailResult,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+export const rejectStudent = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+    if (student.approvalStatus !== 'pending') {
+      return res.status(400).json({ message: 'Only pending registrations can be rejected' });
+    }
+
+    student.approvalStatus = 'rejected';
+    student.rejectedBy = req.user._id;
+    student.rejectedAt = new Date();
+    student.rejectionReason = req.body.reason?.trim() || '';
+    await student.save();
+
+    const populated = await Student.findById(student._id).populate(populateOpts);
+
+    await logActivity({
+      type: 'lead_updated',
+      description: `Student "${student.fullName}" registration rejected`,
+      userId: req.user._id,
+      leadId: student.leadId || undefined,
+      metadata: { studentId: student._id, reason: student.rejectionReason },
+    });
+
+    res.json({
+      ...(populated.toObject ? populated.toObject() : populated),
+      message: 'Registration rejected',
+    });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -159,6 +333,7 @@ export const createStudent = async (req, res) => {
       totalFee,
       discount,
       installmentPlan,
+      customInstallmentCount,
       installmentStartDate,
       amountPaid,
       installments: customInstallments,
@@ -204,10 +379,20 @@ export const createStudent = async (req, res) => {
       installmentStartDate && !Number.isNaN(new Date(installmentStartDate).getTime())
         ? new Date(installmentStartDate)
         : new Date();
-    const installments = resolveInstallments(finalFee, plan, startDate, paid, customInstallments);
+    const customCount =
+      plan === 'Custom EMI' ? Number(customInstallmentCount) || null : null;
+    const installments = resolveInstallments(
+      finalFee,
+      plan,
+      startDate,
+      paid,
+      customInstallments,
+      customCount
+    );
     const balanceAfterRegistration = getInstallmentBalanceTotal(finalFee, paid);
     const hasOverdue = installments.some((i) => i.status === 'Overdue');
     const isScholarship = (courseType || '').trim() === 'Scholarship';
+    const needsApproval = req.user.role !== 'admin';
 
     const studentPayload = {
       fullName: fullName.trim(),
@@ -230,12 +415,18 @@ export const createStudent = async (req, res) => {
       discount: disc,
       finalFee,
       installmentPlan: plan,
+      customInstallmentCount: customCount,
       installments,
       amountPaid: paid,
+      paymentMode: paymentMode?.trim() || 'Cash',
+      transactionId: transactionId?.trim() || '',
       installmentStartDate: balanceAfterRegistration > 0 ? startDate : null,
       paymentStatus: derivePaymentStatus(finalFee, paid, hasOverdue),
       refundEligible: isScholarship,
       status: 'Onboarding',
+      approvalStatus: needsApproval ? 'pending' : 'approved',
+      approvedBy: needsApproval ? null : req.user._id,
+      approvedAt: needsApproval ? null : new Date(),
       registeredBy: req.user._id,
       notes: notes?.trim() || '',
     };
@@ -266,10 +457,12 @@ export const createStudent = async (req, res) => {
 
     await logActivity({
       type: 'lead_updated',
-      description: `Student "${student.fullName}" registered`,
+      description: needsApproval
+        ? `Student "${student.fullName}" submitted for admin approval`
+        : `Student "${student.fullName}" registered`,
       userId: req.user._id,
       leadId: leadId || undefined,
-      metadata: { studentId: student._id },
+      metadata: { studentId: student._id, approvalStatus: student.approvalStatus },
     });
 
     const populated = await Student.findById(student._id).populate(populateOpts);
@@ -277,40 +470,27 @@ export const createStudent = async (req, res) => {
     let welcomeEmailSent = false;
     let welcomeEmailMessage = '';
     let welcomeEmailWarning = false;
-    if (populated.email) {
-      try {
-        const result = await sendWelcomeEmail(populated, {
-          paymentMode: paymentMode?.trim() || 'Cash',
-          transactionId: transactionId?.trim() || '',
-        });
-        welcomeEmailSent = true;
-        const receiptNote = result.receiptAttached
-          ? ' Fee invoice attached.'
-          : Number(populated.finalFee) > 0
-            ? ''
-            : ' No fee invoice (fee not set).';
-        if (result.missingAttachments?.length) {
-          welcomeEmailMessage =
-            `Welcome email sent.${receiptNote} Some PDF attachments were missing on the server.`;
-          welcomeEmailWarning = true;
-        } else {
-          welcomeEmailMessage = `Welcome email sent to student.${receiptNote}`;
-        }
-      } catch (e) {
-        welcomeEmailMessage =
-          e.message || 'Student registered, but welcome email could not be sent.';
-        welcomeEmailWarning = true;
-        console.error('[createStudent] welcome email failed:', e.message);
-      }
+    let bdaEmailSent = false;
+    let pendingApproval = needsApproval;
+
+    if (needsApproval) {
+      welcomeEmailMessage =
+        'Registration submitted for admin approval. The student will receive the welcome email after approval.';
     } else {
-      welcomeEmailMessage = 'Student registered. Add an email address to send the welcome kit.';
+      const emailResult = await sendWelcomeForStudent(populated, { paymentMode, transactionId });
+      welcomeEmailSent = emailResult.welcomeEmailSent;
+      welcomeEmailMessage = emailResult.welcomeEmailMessage;
+      welcomeEmailWarning = emailResult.welcomeEmailWarning;
+      bdaEmailSent = emailResult.bdaEmailSent;
     }
 
     res.status(201).json({
       ...(populated.toObject ? populated.toObject() : populated),
+      pendingApproval,
       welcomeEmailSent,
       welcomeEmailMessage,
       welcomeEmailWarning,
+      bdaEmailSent,
     });
   } catch (error) {
     if (error.statusCode === 400) {
@@ -372,19 +552,32 @@ export const resendWelcomeEmail = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    if (student.approvalStatus === 'pending') {
+      return res.status(400).json({ message: 'Registration is pending admin approval' });
+    }
+    if (student.approvalStatus === 'rejected') {
+      return res.status(400).json({ message: 'Registration was rejected' });
+    }
+
     if (!student.email) {
       return res.status(400).json({ message: 'Student email is missing. Please add student email first.' });
     }
 
     const result = await sendWelcomeEmail(student);
+    const bdaResult = await sendBdaSaleConfirmationEmail(student, {
+      studentEmail: student.email,
+      receiptAttached: Boolean(result.receiptAttached),
+    });
     const attachmentNote =
       result.missingAttachments?.length > 0
         ? ` (${result.missingAttachments.length} PDF(s) missing on server)`
         : '';
     const receiptNote = result.receiptAttached ? ' Fee invoice attached.' : '';
+    const bdaNote = bdaResult.sent ? ` BDA confirmation sent to ${bdaResult.to}.` : '';
 
     res.json({
-      message: `Welcome email sent successfully.${receiptNote}${attachmentNote}`,
+      message: `Welcome email sent successfully.${receiptNote}${attachmentNote}${bdaNote}`,
+      bdaEmailSent: Boolean(bdaResult.sent),
       medium: result.medium,
       attachmentCount: result.attachmentCount,
       missingAttachments: result.missingAttachments,
@@ -436,7 +629,8 @@ export const updateStudent = async (req, res) => {
         student.finalFee,
         student.installmentPlan,
         student.createdAt,
-        Number(student.amountPaid) || 0
+        Number(student.amountPaid) || 0,
+        student.customInstallmentCount
       );
       const hasOverdue = student.installments.some((i) => i.status === 'Overdue');
       student.paymentStatus = derivePaymentStatus(
@@ -453,6 +647,58 @@ export const updateStudent = async (req, res) => {
     await student.save();
     const populated = await Student.findById(student._id).populate(populateOpts);
     res.json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+async function removePaymentReceiptFiles(payments) {
+  for (const payment of payments) {
+    const receiptPath = payment.receiptPath?.trim();
+    if (!receiptPath) continue;
+    const absPath = path.isAbsolute(receiptPath)
+      ? receiptPath
+      : path.join(process.cwd(), receiptPath);
+    try {
+      await fs.unlink(absPath);
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.warn('[delete-student] Could not remove receipt file:', err.message);
+      }
+    }
+  }
+}
+
+export const deleteStudent = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    const studentId = student._id;
+    const payments = await Payment.find({ student: studentId }).lean();
+    await removePaymentReceiptFiles(payments);
+
+    await Promise.all([
+      Payment.deleteMany({ student: studentId }),
+      ReminderLog.deleteMany({ studentId }),
+      EmailLog.deleteMany({ studentId }),
+      Activity.deleteMany({ 'metadata.studentId': studentId }),
+    ]);
+
+    await Student.findByIdAndDelete(studentId);
+
+    await logActivity({
+      type: 'lead_updated',
+      description: `Admission for "${student.fullName}" deleted by admin`,
+      userId: req.user._id,
+      leadId: student.leadId || undefined,
+      metadata: { studentId, action: 'student_deleted' },
+    });
+
+    res.json({
+      message: 'Admission deleted successfully',
+      deletedStudentId: String(studentId),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }

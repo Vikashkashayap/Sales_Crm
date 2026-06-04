@@ -5,6 +5,7 @@ import LeadTable from '../../components/LeadTable';
 import PipelineChart from '../../components/charts/PipelineChart';
 import SourceChart from '../../components/charts/SourceChart';
 import TrendChart from '../../components/charts/TrendChart';
+import PendingRegistrationsPanel from '../../components/admissions/PendingRegistrationsPanel';
 
 const RECENT_LEADS_COUNT = 8;
 
@@ -57,6 +58,8 @@ export default function AdminDashboardPage() {
         <StatCard title="New Leads" value={stats.newLeads ?? 0} icon="leads" />
         <StatCard title="Total Revenue" value={`₹${(stats.totalRevenue ?? 0).toLocaleString()}`} icon="revenue" />
       </div>
+
+      <PendingRegistrationsPanel />
 
       <div className="charts-grid">
         <div className="app-card chart-card">

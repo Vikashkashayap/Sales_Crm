@@ -50,6 +50,7 @@ export const getBDAPerformance = async (req, res) => {
       Student.find({
         assignedBda: { $ne: null },
         createdAt: { $gte: start, $lte: end },
+        approvalStatus: { $nin: ['pending', 'rejected'] },
       }).select('assignedBda amountPaid finalFee createdAt'),
       FollowUp.find({
         type: 'meeting',

@@ -250,12 +250,16 @@ export const getSalesDashboard = async (req, res) => {
         { $match: { ...filter, status: { $in: CONVERTED_STATUSES }, createdAt: { $gte: monthStart, $lte: monthEnd } } },
         { $group: { _id: null, total: { $sum: { $ifNull: ['$dealValue', 0] } } } },
       ]),
-      Student.find({ assignedBda: req.user._id, createdAt: { $gte: weekStart, $lte: weekEnd } }).select(
-        'amountPaid finalFee createdAt'
-      ),
-      Student.find({ assignedBda: req.user._id, createdAt: { $gte: monthStart, $lte: monthEnd } }).select(
-        'amountPaid finalFee createdAt'
-      ),
+      Student.find({
+        assignedBda: req.user._id,
+        createdAt: { $gte: weekStart, $lte: weekEnd },
+        approvalStatus: { $nin: ['pending', 'rejected'] },
+      }).select('amountPaid finalFee createdAt'),
+      Student.find({
+        assignedBda: req.user._id,
+        createdAt: { $gte: monthStart, $lte: monthEnd },
+        approvalStatus: { $nin: ['pending', 'rejected'] },
+      }).select('amountPaid finalFee createdAt'),
     ]);
 
     const conversionRate =

@@ -14,6 +14,11 @@ import {
   buildPaymentReminderEmailSubject,
   buildPaymentReminderEmailText,
 } from './paymentReminderEmailTemplate.js';
+import {
+  buildBdaConfirmationEmailHtml,
+  buildBdaConfirmationEmailSubject,
+  buildBdaConfirmationEmailText,
+} from './bdaConfirmationEmailTemplate.js';
 import { logEmail } from '../utils/emailLogger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -237,6 +242,65 @@ export async function sendWelcomeEmail(student, options = {}) {
       error: err.message,
     });
     throw err;
+  }
+}
+
+/** BDA who sold / owns the registration (assigned BDA, else who registered). */
+export function resolveSellingBda(student) {
+  const pick = (user) => {
+    if (!user || typeof user !== 'object') return null;
+    const email = String(user.email || '').trim();
+    if (!email) return null;
+    return { name: String(user.name || '').trim() || 'Team member', email };
+  };
+  return pick(student?.assignedBda) || pick(student?.registeredBy);
+}
+
+export async function sendBdaSaleConfirmationEmail(student, { studentEmail, receiptAttached = false } = {}) {
+  const bda = resolveSellingBda(student);
+  if (!bda?.email) {
+    return { sent: false, reason: 'no_bda_email' };
+  }
+
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const subject = buildBdaConfirmationEmailSubject(student);
+  const payload = {
+    bdaName: bda.name,
+    student,
+    studentEmail: studentEmail || student?.email?.trim() || '',
+    receiptAttached,
+  };
+
+  try {
+    const info = await transporter.sendMail({
+      from: `Mentors Daily <${from}>`,
+      to: bda.email,
+      subject,
+      text: buildBdaConfirmationEmailText(payload),
+      html: buildBdaConfirmationEmailHtml(payload),
+    });
+
+    await logEmail({
+      studentId: student._id,
+      studentName: student.fullName,
+      email: bda.email,
+      emailType: 'bda_confirmation',
+      status: 'sent',
+    });
+
+    return { sent: true, to: bda.email, info };
+  } catch (err) {
+    await logEmail({
+      studentId: student._id,
+      studentName: student.fullName,
+      email: bda.email,
+      emailType: 'bda_confirmation',
+      status: 'failed',
+      error: err.message,
+    });
+    console.error('[bda-confirmation-email] Failed:', err.message);
+    return { sent: false, reason: err.message };
   }
 }
 

@@ -74,6 +74,7 @@ export async function runPaymentReminders({ triggeredBy = 'cron' } = {}) {
     email: { $exists: true, $nin: [null, ''] },
     status: { $ne: 'Dropped' },
     finalFee: { $gt: 0 },
+    approvalStatus: { $nin: ['pending', 'rejected'] },
   }).lean();
 
   let sent = 0;

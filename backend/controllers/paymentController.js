@@ -238,7 +238,8 @@ export const markInstallmentPaid = async (req, res) => {
           student.finalFee,
           student.installmentPlan,
           student.createdAt,
-          student.amountPaid
+          student.amountPaid,
+          student.customInstallmentCount
         );
 
     const idx = installments.findIndex((i) => i.number === num);

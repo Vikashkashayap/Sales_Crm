@@ -1,28 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   ASPIRANT_TYPES,
   EXAM_MEDIUMS,
   ATTEMPT_OPTIONS,
   INSTALLMENT_PLANS,
+  CUSTOM_EMI_MIN,
+  CUSTOM_EMI_MAX,
   COURSE_TYPES,
   PAYMENT_MODES,
 } from '../../utils/studentConstants';
 import {
   buildInstallmentPreview,
+  formatInstallmentPlanOption,
   getInstallmentBalanceTotal,
   getInstallmentPlanLabel,
+  normalizeCustomInstallmentCount,
   setInstallmentAmountAt,
 } from '../../utils/paymentHelpers';
 
-const STEPS = ['Student Info', 'Program & Fee', 'Confirm & Register'];
+const STEPS_SALES = ['Student Info', 'Program & Fee', 'Review & Submit'];
+const STEPS_ADMIN = ['Student Info', 'Program & Fee', 'Confirm & Register'];
 
 const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
 
 function InstallmentSchedule({
   installments,
   plan,
+  customInstallmentCount,
   balanceDue,
   amountPaidNum,
   editable,
@@ -38,7 +45,7 @@ function InstallmentSchedule({
     <div className="installment-preview-box full-width">
       <div className="installment-preview-header">
         <strong>Payment schedule</strong>
-        <span className="muted-text">{getInstallmentPlanLabel(plan)}</span>
+        <span className="muted-text">{getInstallmentPlanLabel(plan, customInstallmentCount)}</span>
       </div>
       {editable && dueInstallments.length > 1 && (
         <p className="installment-preview-edit-hint muted-text">
@@ -136,6 +143,7 @@ function leadToForm(lead, salesUsers = []) {
     totalFee: lead.dealValue ?? '',
     discount: '',
     installmentPlan: 'Full Payment',
+    customInstallmentCount: '6',
     amountPaid: '',
     paymentMode: 'Cash',
     transactionId: '',
@@ -167,6 +175,7 @@ const emptyForm = {
   totalFee: '',
   discount: '',
   installmentPlan: 'Full Payment',
+  customInstallmentCount: '6',
   amountPaid: '',
   paymentMode: 'Cash',
   transactionId: '',
@@ -183,7 +192,11 @@ export default function RegisterStudentModal({
   onSuccess,
 }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const STEPS = isAdmin ? STEPS_ADMIN : STEPS_SALES;
   const [step, setStep] = useState(0);
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
@@ -208,18 +221,19 @@ export default function RegisterStudentModal({
     setStep(0);
     setForm(lead ? leadToForm(lead, bdas) : { ...emptyForm });
     setAlreadyRegistered(Boolean(isAlreadyRegisteredProp));
+    setPendingApproval(false);
     setEditedSchedule(null);
     scheduleSourceKeyRef.current = '';
   }, [open, leadId, isAlreadyRegisteredProp, lead, bdas]);
 
   useEffect(() => {
     if (!open) return;
-    const key = `${form.totalFee}|${form.discount}|${form.installmentPlan}|${form.amountPaid}|${form.installmentStartDate}`;
+    const key = `${form.totalFee}|${form.discount}|${form.installmentPlan}|${form.customInstallmentCount}|${form.amountPaid}|${form.installmentStartDate}`;
     if (scheduleSourceKeyRef.current && scheduleSourceKeyRef.current !== key) {
       setEditedSchedule(null);
     }
     scheduleSourceKeyRef.current = key;
-  }, [open, form.totalFee, form.discount, form.installmentPlan, form.amountPaid, form.installmentStartDate]);
+  }, [open, form.totalFee, form.discount, form.installmentPlan, form.customInstallmentCount, form.amountPaid, form.installmentStartDate]);
 
   // Re-fill BDA dropdown when sales users load after open (without wiping other fields)
   useEffect(() => {
@@ -250,7 +264,10 @@ export default function RegisterStudentModal({
     api
       .get(`/students/by-lead/${leadId}`)
       .then((res) => {
-        if (!cancelled) setAlreadyRegistered(Boolean(res.data?.registered));
+        if (!cancelled) {
+          setAlreadyRegistered(Boolean(res.data?.registered));
+          setPendingApproval(Boolean(res.data?.pendingApproval));
+        }
       })
       .catch(() => {
         if (!cancelled) setAlreadyRegistered(false);
@@ -268,11 +285,14 @@ export default function RegisterStudentModal({
   const finalFee = Math.max(0, (Number(form.totalFee) || 0) - (Number(form.discount) || 0));
   const amountPaidNum = Math.max(0, Number(form.amountPaid) || 0);
   const startDate = form.installmentStartDate ? new Date(`${form.installmentStartDate}T00:00:00`) : new Date();
+  const customEmiCount =
+    form.installmentPlan === 'Custom EMI' ? normalizeCustomInstallmentCount(form.customInstallmentCount) : null;
   const installmentPreview = buildInstallmentPreview(
     finalFee,
     form.installmentPlan,
     amountPaidNum,
-    startDate
+    startDate,
+    customEmiCount
   );
   const installmentBalanceTotal = getInstallmentBalanceTotal(finalFee, amountPaidNum);
   const displayInstallments = editedSchedule ?? installmentPreview;
@@ -303,6 +323,13 @@ export default function RegisterStudentModal({
     if (finalFee > 0 && amountPaidNum > finalFee) {
       toast.error('Amount paid cannot exceed final fee');
       return false;
+    }
+    if (form.installmentPlan === 'Custom EMI') {
+      const raw = Number(form.customInstallmentCount);
+      if (!raw || raw < CUSTOM_EMI_MIN || raw > CUSTOM_EMI_MAX) {
+        toast.error(`Number of EMIs must be between ${CUSTOM_EMI_MIN} and ${CUSTOM_EMI_MAX}`);
+        return false;
+      }
     }
     if (needsBalanceDueDate) {
       if (!form.installmentStartDate || Number.isNaN(startDate.getTime())) {
@@ -368,6 +395,9 @@ export default function RegisterStudentModal({
         totalFee: form.totalFee === '' ? 0 : Number(form.totalFee),
         discount: form.discount === '' ? 0 : Number(form.discount),
         installmentPlan: form.installmentPlan,
+        ...(form.installmentPlan === 'Custom EMI'
+          ? { customInstallmentCount: customEmiCount }
+          : {}),
         installmentStartDate: needsBalanceDueDate && form.installmentStartDate
           ? `${form.installmentStartDate}T00:00:00`
           : null,
@@ -387,17 +417,24 @@ export default function RegisterStudentModal({
       }
 
       const res = await api.post('/students', payload);
-      if (res.data?.welcomeEmailSent && !res.data?.welcomeEmailWarning) {
+      if (res.data?.pendingApproval) {
+        toast.success(
+          res.data?.welcomeEmailMessage ||
+            'Registration submitted for admin approval. The student will be notified after approval.'
+        );
+      } else if (res.data?.welcomeEmailSent && !res.data?.welcomeEmailWarning) {
         toast.success(res.data?.welcomeEmailMessage || 'Student registered and welcome kit email sent');
       } else if (res.data?.welcomeEmailMessage) {
-        const msg = `Student registered. ${res.data.welcomeEmailMessage}`;
+        const msg = res.data.pendingApproval
+          ? res.data.welcomeEmailMessage
+          : `Student registered. ${res.data.welcomeEmailMessage}`;
         if (res.data?.welcomeEmailWarning) {
           toast.warning(msg);
         } else {
           toast.info(msg);
         }
       } else {
-        toast.success('Student registered successfully');
+        toast.success(isAdmin ? 'Student registered successfully' : 'Submitted for admin approval');
       }
       onSuccess?.();
       onClose?.();
@@ -426,6 +463,12 @@ export default function RegisterStudentModal({
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
+
+        {pendingApproval && !isAdmin && (
+          <p className="approval-submit-hint" style={{ padding: '0 24px 8px' }}>
+            This lead registration is awaiting admin approval. You will be notified once it is approved.
+          </p>
+        )}
 
         <div className="register-steps">
           {STEPS.map((label, i) => (
@@ -517,7 +560,7 @@ export default function RegisterStudentModal({
               <label>Total Fee (₹)
                 <input className="app-input" type="number" min="0" value={form.totalFee} onChange={(e) => set('totalFee', e.target.value)} />
               </label>
-              <label>Discount (₹)
+              <label>Discount+Scholarship (₹)
                 <input className="app-input" type="number" min="0" value={form.discount} onChange={(e) => set('discount', e.target.value)} />
               </label>
               <label>Final Fee (₹)
@@ -526,13 +569,27 @@ export default function RegisterStudentModal({
               <label>Installment Plan
                 <select className="app-select" value={form.installmentPlan} onChange={(e) => set('installmentPlan', e.target.value)}>
                   {INSTALLMENT_PLANS.map((o) => (
-                    <option key={o} value={o}>
-                      {o === 'EMI' ? 'EMI (6 monthly payments)' : o}
-                    </option>
+                    <option key={o} value={o}>{formatInstallmentPlanOption(o)}</option>
                   ))}
                 </select>
-                <span className="field-hint">{getInstallmentPlanLabel(form.installmentPlan)}</span>
+                <span className="field-hint">{getInstallmentPlanLabel(form.installmentPlan, customEmiCount)}</span>
               </label>
+              {form.installmentPlan === 'Custom EMI' && (
+                <label>Number of monthly EMIs *
+                  <input
+                    className="app-input"
+                    type="number"
+                    min={CUSTOM_EMI_MIN}
+                    max={CUSTOM_EMI_MAX}
+                    required
+                    value={form.customInstallmentCount}
+                    onChange={(e) => set('customInstallmentCount', e.target.value)}
+                  />
+                  <span className="field-hint">
+                    Enter how many equal monthly payments to split the balance ({CUSTOM_EMI_MIN}–{CUSTOM_EMI_MAX}).
+                  </span>
+                </label>
+              )}
               {(form.installmentPlan !== 'Full Payment' || needsBalanceDueDate) && (
                 <label>
                   {form.installmentPlan === 'Full Payment' ? 'Balance payment due date' : 'First due date'}
@@ -595,6 +652,7 @@ export default function RegisterStudentModal({
                 <InstallmentSchedule
                   installments={displayInstallments}
                   plan={form.installmentPlan}
+                  customInstallmentCount={customEmiCount}
                   balanceDue={balanceDue}
                   amountPaidNum={amountPaidNum}
                   editable={scheduleEditable}
@@ -609,14 +667,19 @@ export default function RegisterStudentModal({
 
           {step === 2 && (
             <div className="register-confirm">
-              <h3>Review & Register</h3>
+              <h3>{isAdmin ? 'Review & Register' : 'Review & Submit'}</h3>
+              {!isAdmin && (
+                <p className="approval-submit-hint muted-text">
+                  This registration will be sent to admin for approval. The welcome email goes to the student only after approval.
+                </p>
+              )}
               <dl className="confirm-dl">
                 <dt>Student</dt><dd>{form.fullName}</dd>
                 <dt>Phone</dt><dd>{form.phone}</dd>
                 <dt>Email</dt><dd>{form.email || '—'}</dd>
                 <dt>Program</dt><dd>{form.programName} ({form.courseType})</dd>
                 <dt>Final Fee</dt><dd>₹{finalFee.toLocaleString('en-IN')}</dd>
-                <dt>Plan</dt><dd>{form.installmentPlan === 'EMI' ? 'EMI (6 monthly payments)' : form.installmentPlan}</dd>
+                <dt>Plan</dt><dd>{getInstallmentPlanLabel(form.installmentPlan, customEmiCount)}</dd>
                 <dt>Registration amount</dt><dd>{fmtInr(amountPaidNum)}</dd>
                 <dt>Payment mode</dt><dd>{form.paymentMode || 'Cash'}</dd>
                 {form.transactionId && (
@@ -647,6 +710,7 @@ export default function RegisterStudentModal({
                 <InstallmentSchedule
                   installments={displayInstallments}
                   plan={form.installmentPlan}
+                  customInstallmentCount={customEmiCount}
                   balanceDue={balanceDue}
                   amountPaidNum={amountPaidNum}
                   editable={scheduleEditable}
@@ -673,9 +737,19 @@ export default function RegisterStudentModal({
               type="button"
               className="app-btn app-btn-primary register-next-btn"
               onClick={alreadyRegistered ? onClose : handleSubmit}
-              disabled={loading}
+              disabled={loading || (pendingApproval && !isAdmin)}
             >
-              {alreadyRegistered ? 'Close' : loading ? 'Registering…' : 'Confirm & Register'}
+              {alreadyRegistered
+                ? pendingApproval && !isAdmin
+                  ? 'Awaiting approval'
+                  : 'Close'
+                : loading
+                  ? isAdmin
+                    ? 'Registering…'
+                    : 'Submitting…'
+                  : isAdmin
+                    ? 'Confirm & Register'
+                    : 'Submit for approval'}
             </button>
           )}
         </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { PAYMENT_MODES } from '../../utils/studentConstants';
+import { getInstallmentPlanLabel } from '../../utils/paymentHelpers';
 
 const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
 
@@ -279,7 +280,13 @@ export default function StudentPaymentDetailsModal({ open, studentId, onClose, o
                   <dt>Final Fee</dt><dd><strong>{fmtInr(student.finalFee)}</strong></dd>
                   <dt>Paid</dt><dd>{fmtInr(student.amountPaid)}</dd>
                   <dt>Balance</dt><dd><strong>{fmtInr(balanceDue)}</strong></dd>
-                  <dt>Plan</dt><dd>{student.installmentPlan || 'Full Payment'}</dd>
+                  <dt>Plan</dt>
+                  <dd>
+                    {getInstallmentPlanLabel(
+                      student.installmentPlan || 'Full Payment',
+                      student.customInstallmentCount
+                    )}
+                  </dd>
                   {student.installmentStartDate && (
                     <>
                       <dt>First due date</dt>

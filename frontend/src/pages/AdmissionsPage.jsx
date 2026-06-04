@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import RegisterStudentModal from '../components/admissions/RegisterStudentModal';
 import StudentPaymentDetailsModal from '../components/admissions/StudentPaymentDetailsModal';
 function StatusBadge({ value, type }) {
@@ -12,7 +13,9 @@ function StatusBadge({ value, type }) {
 
 export default function AdmissionsPage() {
   const { user } = useAuth();
+  const toast = useToast();
   const isAdmin = user?.role === 'admin';
+  const [deletingId, setDeletingId] = useState(null);
   const [students, setStudents] = useState([]);
   const [stats, setStats] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
@@ -21,6 +24,7 @@ export default function AdmissionsPage() {
   const [showRegister, setShowRegister] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [search, setSearch] = useState('');
+  const [myPending, setMyPending] = useState([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -30,10 +34,16 @@ export default function AdmissionsPage() {
         api.get('/students/stats'),
       ];
       if (isAdmin) requests.push(api.get('/users/sales'));
+      else requests.push(api.get('/students/my-pending'));
       const results = await Promise.all(requests);
       setStudents(results[0].data);
       setStats(results[1].data);
-      if (isAdmin && results[2]) setSalesUsers(results[2].data);
+      if (isAdmin && results[2]) {
+        setSalesUsers(results[2].data);
+        setMyPending([]);
+      } else if (!isAdmin && results[2]) {
+        setMyPending(results[2].data || []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -46,6 +56,7 @@ export default function AdmissionsPage() {
   }, [fetchData]);
 
   const filtered = students.filter((s) => {
+    if (tab === 'pending') return false;
     if (tab === 'onboarding' && s.status !== 'Onboarding') return false;
     if (tab === 'overdue' && s.paymentStatus !== 'Overdue') return false;
     if (search) {
@@ -60,6 +71,30 @@ export default function AdmissionsPage() {
   });
 
   const onboardingCount = students.filter((s) => s.status === 'Onboarding').length;
+
+  const handleDeleteAdmission = async (student, e) => {
+    e?.stopPropagation?.();
+    if (!isAdmin) return;
+    const label = student.fullName || 'this student';
+    if (
+      !window.confirm(
+        `Delete admission for "${label}"?\n\nThis removes the student record, payments, and related logs. The linked lead can be registered again. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(student._id);
+    try {
+      await api.delete(`/students/${student._id}`);
+      if (selectedStudentId === student._id) setSelectedStudentId(null);
+      toast.success('Admission deleted');
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not delete admission');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="admissions-page">
@@ -102,6 +137,11 @@ export default function AdmissionsPage() {
             <button type="button" className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
               All ({students.length})
             </button>
+            {!isAdmin && myPending.length > 0 && (
+              <button type="button" className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>
+                Awaiting approval ({myPending.length})
+              </button>
+            )}
             <button type="button" className={tab === 'onboarding' ? 'active' : ''} onClick={() => setTab('onboarding')}>
               Onboarding ({onboardingCount})
             </button>
@@ -120,6 +160,42 @@ export default function AdmissionsPage() {
 
         {loading ? (
           <div className="skeleton-loader">Loading students…</div>
+        ) : tab === 'pending' ? (
+          myPending.length === 0 ? (
+            <p className="muted-text" style={{ padding: 24 }}>No registrations awaiting approval.</p>
+          ) : (
+            <div className="app-table-wrap">
+              <table className="app-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Program</th>
+                    <th>Fee</th>
+                    <th>Submitted</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myPending.map((s) => (
+                    <tr key={s._id}>
+                      <td>
+                        <strong>{s.fullName}</strong>
+                        <div className="muted-text" style={{ fontSize: 12 }}>{s.phone}</div>
+                      </td>
+                      <td>{s.programName || '—'}</td>
+                      <td>₹{(s.finalFee || 0).toLocaleString('en-IN')}</td>
+                      <td>
+                        {s.createdAt
+                          ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : '—'}
+                      </td>
+                      <td><span className="badge badge-pending-approval">Awaiting admin</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : filtered.length === 0 ? (
           <p className="muted-text" style={{ padding: 24 }}>No students found.</p>
         ) : (
@@ -134,6 +210,7 @@ export default function AdmissionsPage() {
                   <th>Status</th>
                   <th>Payment</th>
                   {isAdmin && <th>Registered By</th>}
+                  {isAdmin && <th style={{ width: 100 }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -161,6 +238,19 @@ export default function AdmissionsPage() {
                     <td><StatusBadge value={s.status} /></td>
                     <td><StatusBadge value={s.paymentStatus} type="payment" /></td>
                     {isAdmin && <td>{s.registeredBy?.name || '—'}</td>}
+                    {isAdmin && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="app-btn app-btn-danger app-btn-sm"
+                          disabled={deletingId === s._id}
+                          onClick={(e) => handleDeleteAdmission(s, e)}
+                          aria-label={`Delete ${s.fullName}`}
+                        >
+                          {deletingId === s._id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
