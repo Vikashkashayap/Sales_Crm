@@ -238,6 +238,51 @@ export const ensureStudentInstallments = (student) => {
   return doc;
 };
 
+/** Payment totals for admissions dashboard (same rules as finance summary). */
+export const computeAdmissionPaymentStats = (students) => {
+  const list = (students || []).map((s) => ensureStudentInstallments(s));
+
+  let totalCollected = 0;
+  let pendingBalance = 0;
+  let overdueAmount = 0;
+  let onboarding = 0;
+  const pendingStudentIds = new Set();
+  const overdueStudentIds = new Set();
+
+  for (const s of list) {
+    const paid = formatCurrency(s.amountPaid);
+    const balance = Math.max(0, formatCurrency(s.finalFee) - paid);
+
+    totalCollected += paid;
+    pendingBalance += balance;
+    if (balance > 0) pendingStudentIds.add(String(s._id));
+    if (s.status === 'Onboarding') onboarding += 1;
+
+    for (const inst of s.installments || []) {
+      if (inst.status === 'Overdue') {
+        const instDue = Math.max(
+          0,
+          formatCurrency(inst.amount) - formatCurrency(inst.paidAmount)
+        );
+        overdueAmount += instDue;
+        overdueStudentIds.add(String(s._id));
+      }
+    }
+  }
+
+  return {
+    total: list.length,
+    onboarding,
+    totalCollected,
+    pendingBalance,
+    pendingStudentCount: pendingStudentIds.size,
+    overdueAmount,
+    overdueStudentCount: overdueStudentIds.size,
+    pending: pendingStudentIds.size,
+    overdue: overdueStudentIds.size,
+  };
+};
+
 export const getPeriodRange = (period) => {
   const now = new Date();
   if (period === 'all') return { start: null, end: null };

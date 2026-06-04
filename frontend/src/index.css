@@ -1698,6 +1698,14 @@ a:hover {
   gap: 4px;
 }
 .admissions-page .stat-mini strong { font-size: 24px; }
+.admissions-stats-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+.admissions-stat-sub {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
 .admissions-toolbar {
   display: flex;
   justify-content: space-between;
@@ -2057,6 +2065,7 @@ a:hover {
   .lead-form-grid { grid-template-columns: 1fr; }
   .charts-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .admissions-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .finance-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .finance-charts-grid { grid-template-columns: 1fr; }
   .finance-installment-row { flex-direction: column; }

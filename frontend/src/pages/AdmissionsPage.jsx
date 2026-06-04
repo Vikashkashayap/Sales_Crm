@@ -4,6 +4,18 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import RegisterStudentModal from '../components/admissions/RegisterStudentModal';
 import StudentPaymentDetailsModal from '../components/admissions/StudentPaymentDetailsModal';
+const fmtInr = (n) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`;
+
+function StatCard({ label, value, subtext, danger }) {
+  return (
+    <div className="app-card stat-mini">
+      <span className="muted-text">{label}</span>
+      <strong className={danger ? 'text-danger' : undefined}>{value}</strong>
+      {subtext && <span className="admissions-stat-sub muted-text">{subtext}</span>}
+    </div>
+  );
+}
+
 function StatusBadge({ value, type }) {
   const cls = type === 'payment'
     ? `badge badge-payment-${(value || '').toLowerCase()}`
@@ -59,6 +71,11 @@ export default function AdmissionsPage() {
     if (tab === 'pending') return false;
     if (tab === 'onboarding' && s.status !== 'Onboarding') return false;
     if (tab === 'overdue' && s.paymentStatus !== 'Overdue') return false;
+    if (tab === 'balance_pending') {
+      const paid = Number(s.amountPaid) || 0;
+      const fee = Number(s.finalFee) || 0;
+      if (fee <= 0 || paid >= fee) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -111,23 +128,36 @@ export default function AdmissionsPage() {
       </div>
 
       {stats && (
-        <div className="stats-grid" style={{ marginBottom: 16 }}>
-          <div className="app-card stat-mini">
-            <span className="muted-text">Total Students</span>
-            <strong>{stats.total}</strong>
-          </div>
-          <div className="app-card stat-mini">
-            <span className="muted-text">Onboarding</span>
-            <strong>{stats.onboarding}</strong>
-          </div>
-          <div className="app-card stat-mini">
-            <span className="muted-text">Pending Payment</span>
-            <strong>{stats.pending}</strong>
-          </div>
-          <div className="app-card stat-mini">
-            <span className="muted-text">Overdue</span>
-            <strong className="text-danger">{stats.overdue}</strong>
-          </div>
+        <div className="stats-grid admissions-stats-grid" style={{ marginBottom: 16 }}>
+          <StatCard
+            label="Total Students"
+            value={stats.total}
+            subtext={`${stats.onboarding} onboarding`}
+          />
+          <StatCard
+            label="Payment Received"
+            value={fmtInr(stats.totalCollected)}
+            subtext="Total collected from students"
+          />
+          <StatCard
+            label="Balance Pending"
+            value={fmtInr(stats.pendingBalance)}
+            subtext={
+              stats.pendingStudentCount > 0
+                ? `${stats.pendingStudentCount} student${stats.pendingStudentCount === 1 ? '' : 's'} with fee pending`
+                : 'All fees cleared'
+            }
+          />
+          <StatCard
+            label="Overdue Amount"
+            value={fmtInr(stats.overdueAmount)}
+            subtext={
+              stats.overdueStudentCount > 0
+                ? `${stats.overdueStudentCount} student${stats.overdueStudentCount === 1 ? '' : 's'} with overdue installments`
+                : 'No overdue installments'
+            }
+            danger={stats.overdueAmount > 0}
+          />
         </div>
       )}
 
@@ -146,7 +176,14 @@ export default function AdmissionsPage() {
               Onboarding ({onboardingCount})
             </button>
             <button type="button" className={tab === 'overdue' ? 'active' : ''} onClick={() => setTab('overdue')}>
-              Overdue
+              Overdue ({stats?.overdueStudentCount ?? students.filter((s) => s.paymentStatus === 'Overdue').length})
+            </button>
+            <button
+              type="button"
+              className={tab === 'balance_pending' ? 'active' : ''}
+              onClick={() => setTab('balance_pending')}
+            >
+              Fee pending ({stats?.pendingStudentCount ?? 0})
             </button>
           </div>
           <input

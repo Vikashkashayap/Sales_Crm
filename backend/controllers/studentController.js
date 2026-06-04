@@ -17,6 +17,7 @@ import {
   derivePaymentStatus,
   generateStudentCode,
   ensureStudentInstallments,
+  computeAdmissionPaymentStats,
 } from '../utils/paymentHelpers.js';
 import { sendWelcomeEmail, sendBdaSaleConfirmationEmail } from '../services/emailService.js';
 
@@ -250,13 +251,9 @@ export const rejectStudent = async (req, res) => {
 export const getStudentStats = async (req, res) => {
   try {
     const filter = buildStudentFilter(req.user);
-    const [total, onboarding, pending, overdue] = await Promise.all([
-      Student.countDocuments(filter),
-      Student.countDocuments({ ...filter, status: 'Onboarding' }),
-      Student.countDocuments({ ...filter, paymentStatus: 'Pending' }),
-      Student.countDocuments({ ...filter, paymentStatus: 'Overdue' }),
-    ]);
-    res.json({ total, onboarding, pending, overdue });
+    const students = await Student.find(filter).lean();
+    const stats = computeAdmissionPaymentStats(students);
+    res.json(stats);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
