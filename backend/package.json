@@ -10,6 +10,7 @@
     "seed": "node scripts/seedAdmin.js",
     "test:register": "node scripts/testStudentRegister.js",
     "reminders:run": "node scripts/runPaymentReminders.js",
+    "materials:run": "node scripts/runDailyMaterialEmails.js",
     "clear-students": "node scripts/clearStudentData.js --yes"
   },
   "dependencies": {

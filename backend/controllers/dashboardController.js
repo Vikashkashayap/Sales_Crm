@@ -4,8 +4,13 @@ import Student from '../models/Student.js';
 import FollowUp from '../models/FollowUp.js';
 import Task from '../models/Task.js';
 import Activity from '../models/Activity.js';
+import EmailLog from '../models/EmailLog.js';
+import DailyMaterial from '../models/DailyMaterial.js';
+import MarketingRecipient from '../models/MarketingRecipient.js';
 import { buildRoleFilter, CONVERTED_STATUSES, LOST_STATUSES } from '../utils/leadHelpers.js';
 import { getPerformancePeriodRange } from '../utils/performanceHelpers.js';
+import { buildMarketingRecipientFilter } from '../jobs/dailyMaterialEmailJob.js';
+import { startOfDay, endOfDay } from '../utils/dateHelpers.js';
 
 export const getStats = async (req, res) => {
   try {
@@ -14,6 +19,9 @@ export const getStats = async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayStart = startOfDay(new Date());
+    const todayEnd = endOfDay(new Date());
 
     const [
       totalLeads,
@@ -25,6 +33,9 @@ export const getStats = async (req, res) => {
       newLeads,
       pipelineAgg,
       sourceAgg,
+      emailsSentToday,
+      totalMaterials,
+      marketingRecipientsCount,
     ] = await Promise.all([
       Lead.countDocuments(filter),
       Lead.countDocuments({ ...filter, status: { $in: CONVERTED_STATUSES } }),
@@ -55,6 +66,13 @@ export const getStats = async (req, res) => {
         { $sort: { count: -1 } },
         { $limit: 10 },
       ]),
+      EmailLog.countDocuments({
+        emailType: 'daily_material',
+        status: 'sent',
+        sentAt: { $gte: todayStart, $lt: todayEnd },
+      }),
+      DailyMaterial.countDocuments({}),
+      MarketingRecipient.countDocuments(buildMarketingRecipientFilter({})),
     ]);
 
     const totalRevenue = revenueResult[0]?.total ?? 0;
@@ -70,6 +88,10 @@ export const getStats = async (req, res) => {
       pendingFollowups,
       newLeads,
       conversionRate,
+      emailsSentToday,
+      totalMaterials,
+      marketingRecipientsCount,
+      activeLeadsCount: marketingRecipientsCount,
       pipelineByStatus: pipelineAgg.map((p) => ({ status: p._id || 'Unknown', count: p.count })),
       leadsBySource: sourceAgg.map((s) => ({ source: s._id || 'Unknown', count: s.count })),
     });

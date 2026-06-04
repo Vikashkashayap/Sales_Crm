@@ -45,6 +45,9 @@ export default function AdminDashboardPage() {
   return (
     <div className="dashboard-page">
       <div className="stats-grid">
+        <StatCard title="Emails Sent Today" value={stats.emailsSentToday ?? 0} icon="email" />
+        <StatCard title="Materials Uploaded" value={stats.totalMaterials ?? 0} icon="materials" />
+        <StatCard title="Email List (uploaded)" value={stats.marketingRecipientsCount ?? stats.activeLeadsCount ?? 0} icon="leads" />
         <StatCard title="Total Leads" value={stats.totalLeads} icon="leads" />
         <StatCard title="Converted" value={stats.totalWon} icon="won" />
         <StatCard title="Lost" value={stats.totalLost} icon="lost" />

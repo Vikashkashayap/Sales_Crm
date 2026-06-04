@@ -25,6 +25,9 @@ A scalable Sales CRM built on **MERN** (MongoDB, Express, React, Node.js) with J
 - Export leads to Excel
 - User management (activate/deactivate, stats, delete)
 - Follow-ups monitoring
+- **Marketing — Daily Materials** (PDF upload, scheduled send date, active/inactive)
+- **Marketing — Email Logs** (per-lead send success/failure)
+- Automated daily study material emails (9:00 AM server time via cron)
 - In-app notifications
 - Activity timeline per lead
 
@@ -74,7 +77,28 @@ Open **http://localhost:3000**
 PORT=5000
 MONGODB_URI=mongodb://127.0.0.1:27017/sales_crm
 JWT_SECRET=your_secure_secret_here
+
+# Daily material emails
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_app_password
+SMTP_FROM=services@yourdomain.com
+DAILY_MATERIAL_EMAILS=true
 ```
+
+See `backend/.env.example` for the full list.
+
+### Daily Email Automation
+
+1. Admin uploads a PDF under **Marketing → Daily Materials**, sets title, description, and **send date**, and marks it **active**.
+2. Every day at **9:00 AM server local time**, the cron job looks for an **active** material whose `sendDate` is **today**.
+3. If found, it emails **only the uploaded marketing list** on Daily Materials (not fresh CRM leads) with the PDF attached.
+4. Upload that list via **Marketing → Daily Materials → Upload Excel** (columns: Name, Email).
+5. Each send is logged under **Marketing → Email Logs** (`sent` / `failed` with error message).
+6. Manual test run: `cd backend && npm run materials:run`
+
+PDFs are stored in `backend/uploads/materials/` and served at `/uploads/materials/...`.
 
 ## API Overview
 
@@ -100,6 +124,15 @@ JWT_SECRET=your_secure_secret_here
 | GET | `/api/notifications` | Auth |
 | GET | `/api/tasks` | Auth |
 | GET | `/api/notes/:leadId` | Auth |
+| POST | `/api/materials` | Admin (multipart PDF) |
+| GET | `/api/materials` | Admin |
+| PATCH | `/api/materials/:id` | Admin (activate/deactivate) |
+| DELETE | `/api/materials/:id` | Admin |
+| GET | `/api/materials/recipients` | Admin |
+| POST | `/api/materials/recipients/upload-excel` | Admin |
+| DELETE | `/api/materials/recipients/:id` | Admin |
+| DELETE | `/api/materials/recipients/clear` | Admin |
+| GET | `/api/email-logs` | Admin |
 
 ## Lead Statuses
 
@@ -120,8 +153,11 @@ Sales_CRM/
 │   ├── config/
 │   ├── controllers/
 │   ├── middleware/
-│   ├── models/          # User, Lead, Note, FollowUp, Activity, Notification, Task, Document
+│   ├── models/          # User, Lead, DailyMaterial, EmailLog, …
 │   ├── routes/
+│   ├── services/        # emailService, dailyMaterialEmailService
+│   ├── jobs/            # paymentReminderJob, dailyMaterialEmailJob
+│   ├── uploads/materials/   # daily PDF storage
 │   ├── utils/
 │   └── server.js
 ├── frontend/
@@ -133,7 +169,7 @@ Sales_CRM/
 │       │   └── leads/
 │       ├── context/
 │       ├── pages/
-│       │   ├── admin/
+│       │   ├── admin/   # AdminDailyMaterialsPage, AdminEmailLogsPage, …
 │       │   └── sales/
 │       └── utils/
 └── README.md

@@ -64,6 +64,18 @@ function NavIcon({ name }) {
         <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round" />
       </svg>
     ),
+    marketing: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M3 11l18-5v8l-18 5V11z" strokeLinejoin="round" />
+        <path d="M11 13v8" strokeLinecap="round" />
+      </svg>
+    ),
+    email: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="M2 7l10 7 10-7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
     logout: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" strokeLinecap="round" />
@@ -156,6 +168,23 @@ export default function Sidebar({ basePath, isAdmin }) {
             <NavLink to={`${basePath}/upload`} className={navItemClass} title="Upload Leads">
               <NavIcon name="upload" />
               <span className="sidebar-link-label">Upload Leads</span>
+            </NavLink>
+            <p className="sidebar-section-label">Marketing</p>
+            <NavLink
+              to={`${basePath}/marketing/materials`}
+              className={navItemClass}
+              title="Daily Materials"
+            >
+              <NavIcon name="marketing" />
+              <span className="sidebar-link-label">Daily Materials</span>
+            </NavLink>
+            <NavLink
+              to={`${basePath}/marketing/email-logs`}
+              className={navItemClass}
+              title="Email Logs"
+            >
+              <NavIcon name="email" />
+              <span className="sidebar-link-label">Email Logs</span>
             </NavLink>
             <p className="sidebar-section-label">Settings</p>
             <NavLink to={`${basePath}/settings/documents`} className={navItemClass} title="Document Management">

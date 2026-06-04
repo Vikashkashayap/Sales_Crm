@@ -8,6 +8,8 @@ import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminUploadPage from './pages/admin/AdminUploadPage';
 import AdminDocumentManagementPage from './pages/admin/AdminDocumentManagementPage';
+import AdminDailyMaterialsPage from './pages/admin/AdminDailyMaterialsPage';
+import AdminEmailLogsPage from './pages/admin/AdminEmailLogsPage';
 import AdminFollowUpsPage from './pages/admin/AdminFollowUpsPage';
 import AdminBDAPerformancePage from './pages/admin/AdminBDAPerformancePage';
 import SalesDashboardPage from './pages/sales/SalesDashboardPage';
@@ -50,6 +52,8 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="upload" element={<AdminUploadPage />} />
         <Route path="settings/documents" element={<AdminDocumentManagementPage />} />
+        <Route path="marketing/materials" element={<AdminDailyMaterialsPage />} />
+        <Route path="marketing/email-logs" element={<AdminEmailLogsPage />} />
         <Route path="admissions" element={<AdmissionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />
       </Route>

@@ -27,6 +27,18 @@ const ICONS = {
   revenue: (
     <span style={{ fontSize: 16, fontWeight: 700 }}>₹</span>
   ),
+  email: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...iconProps}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M2 7l10 7 10-7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  materials: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...iconProps}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinejoin="round" />
+      <path d="M14 2v6h6M10 13h4M10 17h4" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 export default function StatCard({ title, value, icon = 'leads' }) {
@@ -35,6 +47,8 @@ export default function StatCard({ title, value, icon = 'leads' }) {
   else if (icon === 'lost') cardClass.push('stat-card-lost');
   else if (icon === 'followup') cardClass.push('stat-card-followup');
   else if (icon === 'revenue') cardClass.push('stat-card-revenue');
+  else if (icon === 'email') cardClass.push('stat-card-followup');
+  else if (icon === 'materials') cardClass.push('stat-card-won');
 
   return (
     <div className={cardClass.join(' ')}>

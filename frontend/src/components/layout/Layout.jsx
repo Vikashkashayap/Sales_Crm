@@ -12,6 +12,9 @@ function getTitle(pathname) {
   if (pathname.endsWith('/upload')) return 'Upload Leads';
   if (pathname.endsWith('/performance')) return 'BDA Performance';
   if (pathname.endsWith('/followups')) return 'Follow-ups';
+  if (pathname.includes('/marketing/materials')) return 'Daily Materials';
+  if (pathname.includes('/marketing/email-logs')) return 'Email Logs';
+  if (pathname.includes('/settings/documents')) return 'Document Management';
   return 'Dashboard';
 }
 
