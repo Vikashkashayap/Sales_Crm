@@ -8,6 +8,7 @@ function getTitle(pathname) {
   if (pathname.endsWith('/leads')) return 'Leads';
   if (pathname.endsWith('/admissions')) return 'Admissions';
   if (pathname.endsWith('/payments')) return 'Payments & Finance';
+  if (pathname.endsWith('/attendance')) return 'Attendance';
   if (pathname.endsWith('/users')) return 'Users';
   if (pathname.endsWith('/upload')) return 'Upload Leads';
   if (pathname.endsWith('/performance')) return 'BDA Performance';

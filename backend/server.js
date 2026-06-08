@@ -19,6 +19,7 @@ import performanceRoutes from './routes/performanceRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import materialRoutes from './routes/materialRoutes.js';
 import emailLogRoutes from './routes/emailLogRoutes.js';
+import attendanceRoutes from './routes/attendanceRoutes.js';
 import { ensureOnboardingDirs } from './utils/onboardingDocuments.js';
 import { ensureMaterialsDir } from './utils/materialUpload.js';
 import { startPaymentReminderJob } from './jobs/paymentReminderJob.js';
@@ -54,6 +55,7 @@ app.use('/api/performance', performanceRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/email-logs', emailLogRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/email-attachments', express.static(path.join(__dirname, 'email-attachments')));

@@ -16,6 +16,7 @@ import SalesDashboardPage from './pages/sales/SalesDashboardPage';
 import SalesLeadsPage from './pages/sales/SalesLeadsPage';
 import AdmissionsPage from './pages/AdmissionsPage';
 import PaymentsPage from './pages/PaymentsPage';
+import AttendancePage from './pages/AttendancePage';
 
 function PrivateRoute({ children, adminOnly }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="marketing/email-logs" element={<AdminEmailLogsPage />} />
         <Route path="admissions" element={<AdmissionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
       </Route>
       <Route
         path="/"
@@ -70,6 +72,7 @@ export default function App() {
         <Route path="leads" element={<SalesLeadsPage />} />
         <Route path="admissions" element={<AdmissionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

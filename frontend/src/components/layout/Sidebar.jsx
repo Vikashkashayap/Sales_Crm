@@ -6,6 +6,7 @@ const dashboardPath = (base) => (base === '/' ? '/dashboard' : `${base}/dashboar
 const leadsPath = (base) => (base === '/' ? '/leads' : `${base}/leads`);
 const admissionsPath = (base) => (base === '/' ? '/admissions' : `${base}/admissions`);
 const paymentsPath = (base) => (base === '/' ? '/payments' : `${base}/payments`);
+const attendancePath = (base) => (base === '/' ? '/attendance' : `${base}/attendance`);
 
 function NavIcon({ name }) {
   const icons = {
@@ -50,6 +51,12 @@ function NavIcon({ name }) {
         <path d="M2 10h20" strokeLinecap="round" />
       </svg>
     ),
+    attendance: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
     performance: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <path d="M4 19V5M4 19h16M8 15l3-4 4 6 5-8" strokeLinecap="round" strokeLinejoin="round" />
@@ -92,6 +99,7 @@ function getNavSections(basePath, isAdmin) {
         { to: leadsPath(basePath), icon: 'leads', label: 'Leads', accent: 'indigo' },
         { to: admissionsPath(basePath), icon: 'admissions', label: 'Admissions', accent: 'purple' },
         { to: paymentsPath(basePath), icon: 'payments', label: 'Payments', accent: 'green' },
+        { to: attendancePath(basePath), icon: 'attendance', label: 'Attendance', accent: 'teal' },
       ],
     },
   ];
