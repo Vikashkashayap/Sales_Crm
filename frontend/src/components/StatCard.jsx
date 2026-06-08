@@ -47,8 +47,9 @@ export default function StatCard({ title, value, icon = 'leads' }) {
   else if (icon === 'lost') cardClass.push('stat-card-lost');
   else if (icon === 'followup') cardClass.push('stat-card-followup');
   else if (icon === 'revenue') cardClass.push('stat-card-revenue');
-  else if (icon === 'email') cardClass.push('stat-card-followup');
-  else if (icon === 'materials') cardClass.push('stat-card-won');
+  else if (icon === 'email') cardClass.push('stat-card-email');
+  else if (icon === 'materials') cardClass.push('stat-card-materials');
+  else if (icon === 'leads') cardClass.push('stat-card-leads');
 
   return (
     <div className={cardClass.join(' ')}>

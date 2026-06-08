@@ -45,6 +45,18 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="dashboard-page">
+      <div className="dashboard-welcome">
+        <div className="dashboard-welcome-text">
+          <h1 className="dashboard-welcome-title">Sales Dashboard</h1>
+          <p className="dashboard-welcome-sub">Overview of leads, conversions, and team performance</p>
+        </div>
+        <div className="dashboard-welcome-badges">
+          <span className="dash-badge dash-badge--blue">{stats.totalLeads} Leads</span>
+          <span className="dash-badge dash-badge--green">{stats.totalWon} Converted</span>
+          <span className="dash-badge dash-badge--orange">{stats.todayFollowups} Follow-ups Today</span>
+        </div>
+      </div>
+
       <div className="stats-grid">
         <StatCard title="Emails Sent Today" value={stats.emailsSentToday ?? 0} icon="email" />
         <StatCard title="Materials Uploaded" value={stats.totalMaterials ?? 0} icon="materials" />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
-import { LEAD_STATUSES, LEAD_PRIORITIES } from '../../utils/constants';
+import { LEAD_PRIORITIES } from '../../utils/constants';
+import StatusDropdown from '../StatusDropdown';
 import { useToast } from '../../context/ToastContext';
 
 const emptyForm = {
@@ -101,9 +102,11 @@ export default function LeadFormModal({ open, onClose, onSuccess, salesUsers = [
           <label>City<input className="app-input" value={form.city} onChange={(e) => set('city', e.target.value)} /></label>
           <label>Source<input className="app-input" value={form.source} onChange={(e) => set('source', e.target.value)} /></label>
           <label>Status
-            <select className="app-select" value={form.status} onChange={(e) => set('status', e.target.value)}>
-              {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <StatusDropdown
+              value={form.status}
+              onChange={(status) => set('status', status)}
+              style={{ maxWidth: '100%' }}
+            />
           </label>
           <label>Priority
             <select className="app-select" value={form.priority} onChange={(e) => set('priority', e.target.value)}>

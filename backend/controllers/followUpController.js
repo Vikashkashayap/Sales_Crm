@@ -2,6 +2,13 @@ import FollowUp from '../models/FollowUp.js';
 import Lead from '../models/Lead.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification } from '../utils/notifications.js';
+import {
+  ensureFollowUpRecordsForLeads,
+  parseLatestLeadNote,
+} from '../utils/followUpSync.js';
+
+const LEAD_POPULATE_FIELDS =
+  'name mobile email status company targetYear requirement notes followupDate';
 
 const canAccessLead = async (leadId, user) => {
   const lead = await Lead.findOne({ _id: leadId, isDeleted: { $ne: true } });
@@ -15,6 +22,10 @@ const canAccessLead = async (leadId, user) => {
 
 export const getFollowUps = async (req, res) => {
   try {
+    if (req.user.role === 'admin') {
+      await ensureFollowUpRecordsForLeads();
+    }
+
     const filter = { isDeleted: { $ne: true } };
     if (req.user.role !== 'admin') filter.user = req.user._id;
     else if (req.query.userId) filter.user = req.query.userId;
@@ -28,11 +39,19 @@ export const getFollowUps = async (req, res) => {
     }
 
     const followups = await FollowUp.find(filter)
-      .populate('lead', 'name mobile status company')
+      .populate('lead', LEAD_POPULATE_FIELDS)
       .populate('user', 'name email')
-      .sort({ scheduledAt: 1 });
+      .sort({ scheduledAt: -1 });
 
-    res.json(followups);
+    const enriched = followups.map((f) => {
+      const doc = f.toObject();
+      const leadNote = parseLatestLeadNote(doc.lead?.notes);
+      if (!doc.notes && leadNote) doc.notes = leadNote;
+      if (leadNote) doc.latestConversation = leadNote;
+      return doc;
+    });
+
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }

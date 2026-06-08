@@ -7,8 +7,9 @@ export const LEAD_STATUSES = [
   'Negotiation',
   'Converted',
   'Lost',
-  // Legacy — kept for existing records
   'Follow-up',
+  'DNP',
+  // Legacy — kept for existing records
   'Won',
 ];
 

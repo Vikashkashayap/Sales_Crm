@@ -5,6 +5,7 @@ import NotesSection from './NotesSection';
 import AssignDropdown from './AssignDropdown';
 import api from '../api/axios';
 import { CONVERTED_STATUSES } from '../utils/studentConstants';
+import { getStatusColor } from '../utils/constants';
 
 const isConvertedLead = (status) => CONVERTED_STATUSES.includes(status);
 
@@ -206,7 +207,19 @@ export default function LeadTable({
   };
 
   if (!leads?.length) {
-    return <p className="muted-text" style={{ padding: 24 }}>No leads found.</p>;
+    return (
+      <div className="empty-state empty-state--leads">
+        <div className="empty-state-icon" aria-hidden>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+          </svg>
+        </div>
+        <h3>No leads found</h3>
+        <p className="muted-text">Try adjusting your search or filters</p>
+      </div>
+    );
   }
 
   return (
@@ -288,10 +301,12 @@ export default function LeadTable({
           <tbody>
             {leads.map((lead) => {
               const row = getPatchedLead(lead);
+              const rowStatus = row.status === 'Won' ? 'Converted' : (row.status || 'New');
               return (
               <tr
                 key={lead._id}
-                className={selectedIds.has(lead._id) ? 'row-selected' : undefined}
+                className={`lead-row${selectedIds.has(lead._id) ? ' row-selected' : ''}`}
+                style={{ '--row-accent': getStatusColor(rowStatus) }}
               >
                 {showSelection && (
                   <td className="col-checkbox">
@@ -337,7 +352,7 @@ export default function LeadTable({
                 {showPlatformCol && <td>{lead.platform || '—'}</td>}
                 <td>
                   <StatusDropdown
-                    value={row.status}
+                    value={row.status === 'Won' ? 'Converted' : row.status}
                     onChange={(status) => handleInlineUpdate(lead._id, { status }, lead)}
                   />
                 </td>

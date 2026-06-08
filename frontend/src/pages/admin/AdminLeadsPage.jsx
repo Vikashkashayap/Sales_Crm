@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api/axios';
 import LeadTable from '../../components/LeadTable';
 import LeadFilters from '../../components/leads/LeadFilters';
+import LeadsPageHeader from '../../components/leads/LeadsPageHeader';
 import LeadFormModal from '../../components/leads/LeadFormModal';
 import KanbanBoard from '../../components/leads/KanbanBoard';
 import LeadDetailDrawer from '../../components/leads/LeadDetailDrawer';
@@ -94,31 +95,40 @@ export default function AdminLeadsPage() {
   };
 
   return (
-    <div>
-      <div className="page-toolbar">
-        <h2 className="section-heading" style={{ margin: 0 }}>All Leads</h2>
-        <div className="toolbar-actions">
-          <div className="view-toggle">
-            <button type="button" className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>
-            <button type="button" className={view === 'kanban' ? 'active' : ''} onClick={() => setView('kanban')}>Kanban</button>
-          </div>
-          <button type="button" className="app-btn app-btn-ghost" onClick={handleExport}>Export</button>
-          <button type="button" className="app-btn app-btn-primary" onClick={() => { setEditLead(null); setShowForm(true); }}>
-            + Add Lead
-          </button>
-        </div>
-      </div>
+    <div className="leads-page">
+      <LeadsPageHeader
+        title="All Leads"
+        subtitle="Manage, filter and assign your sales pipeline"
+        total={total}
+        leads={leads}
+        view={view}
+        onViewChange={setView}
+        actions={(
+          <>
+            <button type="button" className="app-btn app-btn-ghost" onClick={handleExport}>Export</button>
+            <button type="button" className="app-btn app-btn-primary" onClick={() => { setEditLead(null); setShowForm(true); }}>
+              + Add Lead
+            </button>
+          </>
+        )}
+      />
 
-      <div className="app-card" style={{ marginBottom: 16 }}>
+      <div className="app-card app-card--filters">
         <LeadFilters filters={filters} onChange={(f) => { setFilters(f); setPage(1); }} salesUsers={salesUsers} isAdmin />
         {view === 'table' && (
-          <p className="bulk-assign-hint muted-text">
-            Bulk assign: left-side checkboxes se leads select karein, phir &quot;Assign selected&quot; se ek saath BDA ko assign karein.
-          </p>
+          <div className="bulk-assign-hint">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
+            </svg>
+            <span>
+              Bulk assign: left-side checkboxes se leads select karein, phir &quot;Assign selected&quot; se ek saath BDA ko assign karein.
+            </span>
+          </div>
         )}
       </div>
 
-      <div className="app-card">
+      <div className="app-card app-card--table">
         {loading ? (
           <div className="skeleton-loader">Loading leads...</div>
         ) : view === 'kanban' ? (

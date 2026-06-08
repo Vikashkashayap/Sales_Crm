@@ -1,5 +1,5 @@
 import React from 'react';
-import { KANBAN_COLUMNS, statusBadgeClass } from '../../utils/constants';
+import { KANBAN_COLUMNS, statusBadgeClass, STATUS_COLORS } from '../../utils/constants';
 import StatusDropdown from '../StatusDropdown';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -37,7 +37,11 @@ export default function KanbanBoard({ leads, onRefresh, isAdmin, salesUsers, onS
   return (
     <div className="kanban-board">
       {KANBAN_COLUMNS.map((col) => (
-        <div key={col} className="kanban-column">
+        <div
+          key={col}
+          className="kanban-column"
+          style={{ '--col-accent': STATUS_COLORS[col] || 'var(--primary)' }}
+        >
           <div className="kanban-column-header">
             <span className={`badge ${statusBadgeClass(col)}`}>{col}</span>
             <span className="kanban-count">{byStatus[col]?.length || 0}</span>

@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-const navItemClass = ({ isActive }) =>
-  `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`;
-
 const dashboardPath = (base) => (base === '/' ? '/dashboard' : `${base}/dashboard`);
 const leadsPath = (base) => (base === '/' ? '/leads' : `${base}/leads`);
 const admissionsPath = (base) => (base === '/' ? '/admissions' : `${base}/admissions`);
@@ -86,15 +83,76 @@ function NavIcon({ name }) {
   return <span className="sidebar-icon">{icons[name]}</span>;
 }
 
+function getNavSections(basePath, isAdmin) {
+  const sections = [
+    {
+      label: 'Main',
+      items: [
+        { to: dashboardPath(basePath), icon: 'dashboard', label: 'Dashboard', accent: 'blue' },
+        { to: leadsPath(basePath), icon: 'leads', label: 'Leads', accent: 'indigo' },
+        { to: admissionsPath(basePath), icon: 'admissions', label: 'Admissions', accent: 'purple' },
+        { to: paymentsPath(basePath), icon: 'payments', label: 'Payments', accent: 'green' },
+      ],
+    },
+  ];
+
+  if (isAdmin) {
+    sections.push(
+      {
+        label: 'Admin',
+        items: [
+          { to: `${basePath}/performance`, icon: 'performance', label: 'BDA Performance', accent: 'orange' },
+          { to: `${basePath}/followups`, icon: 'followups', label: 'Follow-ups', accent: 'amber' },
+          { to: `${basePath}/users`, icon: 'users', label: 'Users', accent: 'cyan' },
+          { to: `${basePath}/upload`, icon: 'upload', label: 'Upload Leads', accent: 'teal' },
+        ],
+      },
+      {
+        label: 'Marketing',
+        items: [
+          { to: `${basePath}/marketing/materials`, icon: 'marketing', label: 'Daily Materials', accent: 'pink' },
+          { to: `${basePath}/marketing/email-logs`, icon: 'email', label: 'Email Logs', accent: 'violet' },
+        ],
+      },
+      {
+        label: 'Settings',
+        items: [
+          { to: `${basePath}/settings/documents`, icon: 'settings', label: 'Document Management', accent: 'slate' },
+        ],
+      }
+    );
+  }
+
+  return sections;
+}
+
+function SidebarNavLink({ to, icon, label, accent }) {
+  return (
+    <NavLink
+      to={to}
+      title={label}
+      className={({ isActive }) =>
+        `sidebar-link sidebar-link--${accent}${isActive ? ' sidebar-link-active' : ''}`
+      }
+    >
+      <span className="sidebar-icon-wrap">
+        <NavIcon name={icon} />
+      </span>
+      <span className="sidebar-link-label">{label}</span>
+    </NavLink>
+  );
+}
+
 export default function Sidebar({ basePath, isAdmin }) {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const sections = getNavSections(basePath, isAdmin);
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--sidebar-width',
-      collapsed ? '68px' : '220px'
+      collapsed ? '72px' : '232px'
     );
     return () => {
       document.documentElement.style.removeProperty('--sidebar-width');
@@ -106,14 +164,20 @@ export default function Sidebar({ basePath, isAdmin }) {
     navigate('/login');
   };
 
+  const roleLabel = user?.role === 'admin' ? 'Admin' : 'Sales';
+  const roleClass = user?.role === 'admin' ? 'sidebar-role-badge--admin' : 'sidebar-role-badge--sales';
+
   return (
     <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <div className="sidebar-header">
-        <img
-          src="/mentors-daily-logo.png"
-          alt="Mentors Daily"
-          className="sidebar-logo"
-        />
+        <div className="sidebar-brand">
+          <img
+            src="/mentors-daily-logo.png"
+            alt="Mentors Daily"
+            className="sidebar-logo"
+          />
+          {!collapsed && <span className="sidebar-brand-tag">CRM</span>}
+        </div>
         <button
           type="button"
           className="sidebar-collapse-btn"
@@ -121,7 +185,7 @@ export default function Sidebar({ basePath, isAdmin }) {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand' : 'Collapse'}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden>
             {collapsed ? (
               <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
             ) : (
@@ -131,82 +195,33 @@ export default function Sidebar({ basePath, isAdmin }) {
         </button>
       </div>
 
-      <nav className="sidebar-nav">
-        <p className="sidebar-section-label">Main</p>
-        <NavLink to={dashboardPath(basePath)} className={navItemClass} title="Dashboard">
-          <NavIcon name="dashboard" />
-          <span className="sidebar-link-label">Dashboard</span>
-        </NavLink>
-        <NavLink to={leadsPath(basePath)} className={navItemClass} title="Leads">
-          <NavIcon name="leads" />
-          <span className="sidebar-link-label">Leads</span>
-        </NavLink>
-        <NavLink to={admissionsPath(basePath)} className={navItemClass} title="Admissions">
-          <NavIcon name="admissions" />
-          <span className="sidebar-link-label">Admissions</span>
-        </NavLink>
-        <NavLink to={paymentsPath(basePath)} className={navItemClass} title="Payments & Finance">
-          <NavIcon name="payments" />
-          <span className="sidebar-link-label">Payments</span>
-        </NavLink>
-
-        {isAdmin && (
-          <>
-            <p className="sidebar-section-label">Admin</p>
-            <NavLink to={`${basePath}/performance`} className={navItemClass} title="BDA Performance">
-              <NavIcon name="performance" />
-              <span className="sidebar-link-label">BDA Performance</span>
-            </NavLink>
-            <NavLink to={`${basePath}/followups`} className={navItemClass} title="Follow-ups">
-              <NavIcon name="followups" />
-              <span className="sidebar-link-label">Follow-ups</span>
-            </NavLink>
-            <NavLink to={`${basePath}/users`} className={navItemClass} title="Users">
-              <NavIcon name="users" />
-              <span className="sidebar-link-label">Users</span>
-            </NavLink>
-            <NavLink to={`${basePath}/upload`} className={navItemClass} title="Upload Leads">
-              <NavIcon name="upload" />
-              <span className="sidebar-link-label">Upload Leads</span>
-            </NavLink>
-            <p className="sidebar-section-label">Marketing</p>
-            <NavLink
-              to={`${basePath}/marketing/materials`}
-              className={navItemClass}
-              title="Daily Materials"
-            >
-              <NavIcon name="marketing" />
-              <span className="sidebar-link-label">Daily Materials</span>
-            </NavLink>
-            <NavLink
-              to={`${basePath}/marketing/email-logs`}
-              className={navItemClass}
-              title="Email Logs"
-            >
-              <NavIcon name="email" />
-              <span className="sidebar-link-label">Email Logs</span>
-            </NavLink>
-            <p className="sidebar-section-label">Settings</p>
-            <NavLink to={`${basePath}/settings/documents`} className={navItemClass} title="Document Management">
-              <NavIcon name="settings" />
-              <span className="sidebar-link-label">Document Management</span>
-            </NavLink>
-          </>
-        )}
+      <nav className="sidebar-nav" aria-label="Main navigation">
+        {sections.map((section) => (
+          <div key={section.label} className="sidebar-section">
+            <p className="sidebar-section-label">{section.label}</p>
+            {section.items.map((item) => (
+              <SidebarNavLink key={item.to} {...item} />
+            ))}
+          </div>
+        ))}
       </nav>
 
       <div className="sidebar-footer">
-        {user && !collapsed && (
-          <div className="sidebar-user">
+        {user && (
+          <div className="sidebar-user" title={collapsed ? user.name : undefined}>
             <span className="sidebar-user-avatar">{user.name?.charAt(0)?.toUpperCase() || 'U'}</span>
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{user.name}</span>
-              <span className="sidebar-user-role">{user.role === 'admin' ? 'Admin' : 'Sales'}</span>
-            </div>
+            {!collapsed && (
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name">{user.name}</span>
+                <span className={`sidebar-role-badge ${roleClass}`}>{roleLabel}</span>
+              </div>
+            )}
           </div>
         )}
         <button type="button" onClick={handleLogout} className="sidebar-link sidebar-logout" title="Logout">
-          <NavIcon name="logout" />
+          <span className="sidebar-icon-wrap sidebar-icon-wrap--logout">
+            <NavIcon name="logout" />
+          </span>
           <span className="sidebar-link-label">Logout</span>
         </button>
       </div>

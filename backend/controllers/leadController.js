@@ -12,6 +12,11 @@ import { logActivity } from '../utils/activityLogger.js';
 import { createNotification } from '../utils/notifications.js';
 import { buildRoleFilter } from '../utils/leadHelpers.js';
 import { LEAD_STATUSES } from '../utils/constants.js';
+import {
+  syncFollowUpForFollowUpStatus,
+  cancelPendingFollowUpsForLead,
+  syncFollowUpNotesForLead,
+} from '../utils/followUpSync.js';
 
 const populateOpts = { path: 'assignedTo', select: 'name email' };
 
@@ -358,6 +363,22 @@ export const updateLead = async (req, res) => {
         assigneeUserId,
         actorUserId: req.user._id,
       });
+    }
+
+    if (updates.status === 'Follow-up' && prevStatus !== 'Follow-up') {
+      const assigneeUserId =
+        updated.assignedTo?._id || updated.assignedTo || req.user._id;
+      await syncFollowUpForFollowUpStatus({
+        lead: updated,
+        assigneeUserId,
+        actorUserId: req.user._id,
+      });
+    } else if (prevStatus === 'Follow-up' && updates.status && updates.status !== 'Follow-up') {
+      await cancelPendingFollowUpsForLead(lead._id);
+    }
+
+    if (updates.notes !== undefined && updated.status === 'Follow-up') {
+      await syncFollowUpNotesForLead(lead._id, updates.notes);
     }
 
     res.json(updated);

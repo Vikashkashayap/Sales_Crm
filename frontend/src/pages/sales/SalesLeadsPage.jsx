@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import LeadTable from '../../components/LeadTable';
 import LeadFilters from '../../components/leads/LeadFilters';
+import LeadsPageHeader from '../../components/leads/LeadsPageHeader';
 import KanbanBoard from '../../components/leads/KanbanBoard';
 import LeadDetailDrawer from '../../components/leads/LeadDetailDrawer';
 import RegisterStudentModal from '../../components/admissions/RegisterStudentModal';
@@ -68,18 +69,19 @@ export default function SalesLeadsPage() {
   } = useStudentRegistration(silentRefresh);
 
   return (
-    <div>
-      <div className="page-toolbar">
-        <h2 className="section-heading" style={{ margin: 0 }}>My Leads</h2>
-        <div className="view-toggle">
-          <button type="button" className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>
-          <button type="button" className={view === 'kanban' ? 'active' : ''} onClick={() => setView('kanban')}>Kanban</button>
-        </div>
-      </div>
-      <div className="app-card" style={{ marginBottom: 16 }}>
+    <div className="leads-page">
+      <LeadsPageHeader
+        title="My Leads"
+        subtitle="Track and update your assigned leads"
+        total={leads.length}
+        leads={leads}
+        view={view}
+        onViewChange={setView}
+      />
+      <div className="app-card app-card--filters">
         <LeadFilters filters={filters} onChange={setFilters} isAdmin={false} />
       </div>
-      <div className="app-card">
+      <div className="app-card app-card--table">
         {loading ? (
           <div className="skeleton-loader">Loading...</div>
         ) : view === 'kanban' ? (
