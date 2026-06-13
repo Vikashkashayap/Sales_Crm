@@ -7,6 +7,7 @@ export const LEAD_STATUSES = [
   'Qualified',
   'Proposal Sent',
   'Negotiation',
+  'Reject',
   'Lost',
   'Converted',
 ];
@@ -20,6 +21,7 @@ export const STATUS_COLORS = {
   Qualified: '#4F46E5',
   'Proposal Sent': '#0D9488',
   Negotiation: '#D97706',
+  Reject: '#991B1B',
   Converted: '#16A34A',
   Lost: '#6B7280',
   'Follow-up': '#EA580C',
@@ -55,6 +57,7 @@ export const statusBadgeClass = (s) => {
   if (v === 'follow-up') return 'badge-follow-up';
   if (v === 'proposal-sent') return 'badge-proposal';
   if (v === 'won' || v === 'converted') return 'badge-won';
+  if (v === 'reject') return 'badge-reject';
   if (v === 'dnp') return 'badge-dnp';
   return `badge-${v}`;
 };

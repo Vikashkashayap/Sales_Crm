@@ -184,10 +184,22 @@ export default function NotesSection({ notes = [], onAddNote, disabled, compact 
         <button
           ref={triggerRef}
           type="button"
-          className="notes-cell-trigger"
+          className={`notes-cell-trigger${list.length > 0 ? ' notes-cell-trigger--filled' : ' notes-cell-trigger--empty'}`}
           onClick={() => setOpen((v) => !v)}
           title={latest || 'Add a note'}
         >
+          <span className="notes-cell-icon" aria-hidden>
+            {list.length > 0 ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinejoin="round" />
+                <path d="M14 2v6h6M8 13h8M8 17h5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            )}
+          </span>
           {list.length > 0 ? (
             <>
               <span className="notes-count-badge">{list.length}</span>

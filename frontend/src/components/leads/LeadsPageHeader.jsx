@@ -66,21 +66,23 @@ export default function LeadsPageHeader({
         </div>
       </div>
 
-      <div className="leads-stat-row">
-        <div className="leads-stat-card leads-stat-card--primary">
-          <span className="leads-stat-num">{total}</span>
-          <span className="leads-stat-lbl">Total Leads</span>
-        </div>
-        {statusCounts.map(([status, count]) => (
-          <div
-            key={status}
-            className="leads-stat-card"
-            style={{ '--stat-color': STATUS_COLORS[status] || '#64748B' }}
-          >
-            <span className="leads-stat-num">{count}</span>
-            <span className="leads-stat-lbl">{status}</span>
+      <div className="leads-stat-strip">
+        <div className="leads-stat-row">
+          <div className="leads-stat-card leads-stat-card--primary">
+            <span className="leads-stat-num">{total}</span>
+            <span className="leads-stat-lbl">Total Leads</span>
           </div>
-        ))}
+          {statusCounts.map(([status, count]) => (
+            <div
+              key={status}
+              className="leads-stat-card"
+              style={{ '--stat-color': STATUS_COLORS[status] || '#94A3B8' }}
+            >
+              <span className="leads-stat-num">{count}</span>
+              <span className="leads-stat-lbl">{status}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

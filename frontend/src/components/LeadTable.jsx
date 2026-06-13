@@ -357,7 +357,7 @@ export default function LeadTable({
                   />
                 </td>
                 {showAssignColumn && (
-                  <td>
+                  <td className="col-assign">
                     {canTransferLeads && !isAdmin ? (
                       <AssignDropdown
                         users={assignUsers}

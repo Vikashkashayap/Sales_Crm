@@ -5,6 +5,7 @@ export const LEAD_STATUSES = [
   'Qualified',
   'Proposal Sent',
   'Negotiation',
+  'Reject',
   'Converted',
   'Lost',
   'Follow-up',

@@ -20,7 +20,7 @@ export default function StatusDropdown({
   style = {},
 }) {
   const [open, setOpen] = useState(false);
-  const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: 130 });
+  const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: 130, maxHeight: 320 });
   const wrapRef = useRef(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
@@ -28,19 +28,56 @@ export default function StatusDropdown({
   const displayValue = value === 'Won' ? 'Converted' : value;
   const label = displayValue || emptyLabel;
   const hasValue = Boolean(displayValue);
+  const options = includeEmpty ? [null, ...LEAD_STATUSES] : LEAD_STATUSES;
 
   const updateMenuPosition = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
+
     const rect = trigger.getBoundingClientRect();
+    const menuEl = menuRef.current;
     const menuWidth = Math.max(rect.width, 130);
-    let left = rect.left;
+    const viewportPad = 8;
+    const gap = 4;
+    const menuMax = 320;
     const vw = window.innerWidth;
-    if (left + menuWidth > vw - 8) left = vw - menuWidth - 8;
+    const vh = window.innerHeight;
+
+    let left = rect.left;
+    if (left + menuWidth > vw - viewportPad) left = vw - menuWidth - viewportPad;
+    left = Math.max(viewportPad, left);
+
+    const spaceBelow = vh - rect.bottom - gap - viewportPad;
+    const spaceAbove = rect.top - gap - viewportPad;
+    const estimatedHeight = Math.min(options.length * 42 + 12, menuMax);
+    const measuredHeight = menuEl
+      ? Math.min(menuEl.scrollHeight, menuMax)
+      : estimatedHeight;
+    const openUp = spaceBelow < measuredHeight && spaceAbove > spaceBelow;
+
+    let top;
+    let maxHeight;
+
+    if (openUp) {
+      maxHeight = Math.min(menuMax, Math.max(spaceAbove, 120));
+      const menuHeight = menuEl
+        ? Math.min(menuEl.offsetHeight, maxHeight)
+        : Math.min(estimatedHeight, maxHeight);
+      top = rect.top - gap - menuHeight;
+      if (top < viewportPad) {
+        top = viewportPad;
+        maxHeight = rect.top - gap - viewportPad;
+      }
+    } else {
+      top = rect.bottom + gap;
+      maxHeight = Math.min(menuMax, Math.max(spaceBelow, 120));
+    }
+
     setMenuStyle({
-      top: rect.bottom + 4,
-      left: Math.max(8, left),
+      top,
+      left,
       width: menuWidth,
+      maxHeight,
     });
   };
 
@@ -50,11 +87,19 @@ export default function StatusDropdown({
     const onReposition = () => updateMenuPosition();
     window.addEventListener('resize', onReposition);
     window.addEventListener('scroll', onReposition, true);
+
+    const menuEl = menuRef.current;
+    const resizeObserver = menuEl
+      ? new ResizeObserver(() => updateMenuPosition())
+      : null;
+    resizeObserver?.observe(menuEl);
+
     return () => {
       window.removeEventListener('resize', onReposition);
       window.removeEventListener('scroll', onReposition, true);
+      resizeObserver?.disconnect();
     };
-  }, [open]);
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,8 +117,6 @@ export default function StatusDropdown({
     };
   }, [open]);
 
-  const options = includeEmpty ? [null, ...LEAD_STATUSES] : LEAD_STATUSES;
-
   const pick = (status) => {
     onChange(status ?? '');
     setOpen(false);
@@ -90,6 +133,7 @@ export default function StatusDropdown({
             top: menuStyle.top,
             left: menuStyle.left,
             width: menuStyle.width,
+            maxHeight: menuStyle.maxHeight,
             zIndex: 10000,
           }}
         >

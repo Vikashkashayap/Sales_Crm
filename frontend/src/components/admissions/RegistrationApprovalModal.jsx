@@ -15,7 +15,7 @@ function InstallmentScheduleReadonly({ student }) {
   if (!showRegistration && !dueInstallments.length) return null;
 
   return (
-    <div className="installment-preview-box full-width" style={{ marginTop: 16 }}>
+    <div className="installment-preview-box full-width">
       <div className="installment-preview-header">
         <strong>Payment schedule</strong>
         <span className="muted-text">
@@ -68,6 +68,13 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
   const submittedBy = student.registeredBy?.name || '—';
   const bdaName = student.assignedBda?.name || student.leadBdaName || '—';
 
+  const handleClose = () => {
+    if (loading) return;
+    setRejectMode(false);
+    setRejectReason('');
+    onClose?.();
+  };
+
   const handleApprove = async () => {
     setLoading(true);
     try {
@@ -80,7 +87,7 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
         toast.success('Registration approved');
       }
       onApproved?.();
-      onClose?.();
+      handleClose();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not approve registration');
     } finally {
@@ -94,7 +101,7 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
       await api.post(`/students/${student._id}/reject`, { reason: rejectReason });
       toast.info('Registration rejected');
       onRejected?.();
-      onClose?.();
+      handleClose();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not reject registration');
     } finally {
@@ -103,14 +110,23 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="presentation">
-      <div className="register-modal app-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="approval-modal-title">
-        <div className="register-modal-header">
-          <h2 id="approval-modal-title">Review registration</h2>
-          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+    <div className="modal-overlay approval-modal-overlay" onClick={handleClose} role="presentation">
+      <div
+        className="modal-content approval-registration-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-labelledby="approval-modal-title"
+        aria-modal="true"
+      >
+        <div className="modal-header approval-modal-header">
+          <div>
+            <h2 id="approval-modal-title">Review registration</h2>
+            <p className="modal-subtitle">Approve or reject this student registration</p>
+          </div>
+          <button type="button" className="modal-close" onClick={handleClose} aria-label="Close">×</button>
         </div>
 
-        <div className="register-modal-body">
+        <div className="approval-modal-body">
           <p className="approval-modal-intro muted-text">
             Submitted by <strong>{submittedBy}</strong>
             {student.createdAt && (
@@ -119,8 +135,8 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
             . Approve to register the student and send the welcome email.
           </p>
 
-          <div className="register-confirm" style={{ padding: 0 }}>
-            <dl className="confirm-dl">
+          <div className="register-confirm approval-confirm-panel">
+            <dl className="confirm-dl confirm-dl--compact">
               <dt>Student</dt><dd>{student.fullName}</dd>
               <dt>Phone</dt><dd>{student.phone}</dd>
               <dt>Email</dt><dd>{student.email || '—'}</dd>
@@ -153,7 +169,7 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
           </div>
 
           {rejectMode && (
-            <label className="full-width" style={{ display: 'block', marginTop: 16 }}>
+            <label className="approval-reject-field">
               Rejection reason (optional)
               <textarea
                 className="app-input"
@@ -166,16 +182,15 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
           )}
         </div>
 
-        <div className="register-modal-footer">
-          <button type="button" className="app-btn app-btn-ghost" onClick={onClose} disabled={loading}>
+        <div className="approval-modal-footer">
+          <button type="button" className="app-btn app-btn-ghost" onClick={handleClose} disabled={loading}>
             Cancel
           </button>
-          <div style={{ flex: 1 }} />
           {!rejectMode ? (
             <>
               <button
                 type="button"
-                className="app-btn app-btn-ghost"
+                className="app-btn app-btn-ghost approval-btn-reject"
                 onClick={() => setRejectMode(true)}
                 disabled={loading}
               >
@@ -183,7 +198,7 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
               </button>
               <button
                 type="button"
-                className="app-btn app-btn-primary register-next-btn"
+                className="app-btn app-btn-primary approval-btn-approve"
                 onClick={handleApprove}
                 disabled={loading}
               >
@@ -192,12 +207,17 @@ export default function RegistrationApprovalModal({ open, student, onClose, onAp
             </>
           ) : (
             <>
-              <button type="button" className="app-btn app-btn-ghost" onClick={() => setRejectMode(false)} disabled={loading}>
+              <button
+                type="button"
+                className="app-btn app-btn-ghost"
+                onClick={() => setRejectMode(false)}
+                disabled={loading}
+              >
                 Back
               </button>
               <button
                 type="button"
-                className="app-btn app-btn-danger"
+                className="app-btn app-btn-danger approval-btn-confirm-reject"
                 onClick={handleReject}
                 disabled={loading}
               >
